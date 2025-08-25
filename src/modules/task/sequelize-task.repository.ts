@@ -1,6 +1,6 @@
-import { Task } from "../../models/Task.js";
-import { TaskEntity } from "../../domain/task/Task.js";
-import { type TaskRepository, type CreateTaskDTO, type UpdateTaskDTO } from "../../domain/task/TaskRepository.js";
+import { Task } from "./task.model.js";
+import { TaskEntity } from "./task.entity.js";
+import { type TaskRepository, type CreateTaskDTO, type UpdateTaskDTO } from "./task.repository.js";
 
 function toEntity(model: Task): TaskEntity {
     return new TaskEntity({
@@ -56,5 +56,3 @@ export class SequelizeTaskRepository implements TaskRepository {
         return count > 0;
     }
 }
-
-

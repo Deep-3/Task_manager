@@ -1,4 +1,4 @@
-import { type TaskRepository } from "../../domain/task/TaskRepository.js";
+import { type TaskRepository } from "./task.repository.js";
 
 export class ListTasksUseCase {
     constructor(private readonly repo: TaskRepository) {}
@@ -11,6 +11,3 @@ export class ListTasksUseCase {
         return this.repo.listAll();
     }
 }
-
-
-

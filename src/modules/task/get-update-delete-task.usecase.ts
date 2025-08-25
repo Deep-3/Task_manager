@@ -1,4 +1,4 @@
-import { type TaskRepository, type UpdateTaskDTO } from "../../domain/task/TaskRepository.js";
+import { type TaskRepository, type UpdateTaskDTO } from "./task.repository.js";
 
 export class GetTaskUseCase {
     constructor(private readonly repo: TaskRepository) {}
@@ -14,6 +14,3 @@ export class DeleteTaskUseCase {
     constructor(private readonly repo: TaskRepository) {}
     async execute(id: string) { return this.repo.delete(id); }
 }
-
-
-

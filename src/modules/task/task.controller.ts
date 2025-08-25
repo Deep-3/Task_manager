@@ -1,9 +1,9 @@
 import { type Response, Router } from "express";
 import { type AuthRequest } from "../../middleware/auth.js";
-import { CreateTaskUseCase } from "../../application/task/CreateTask.js";
-import { ListTasksUseCase } from "../../application/task/ListTasks.js";
-import { GetTaskUseCase, UpdateTaskUseCase, DeleteTaskUseCase } from "../../application/task/GetUpdateDeleteTask.js";
-import { SequelizeTaskRepository } from "../../infrastructure/repositories/SequelizeTaskRepository.js";
+import { CreateTaskUseCase } from "./create-task.usecase.js";
+import { ListTasksUseCase } from "./list-tasks.usecase.js";
+import { GetTaskUseCase, UpdateTaskUseCase, DeleteTaskUseCase } from "./get-update-delete-task.usecase.js";
+import { SequelizeTaskRepository } from "./sequelize-task.repository.js";
 
 const repo = new SequelizeTaskRepository();
 const createUC = new CreateTaskUseCase(repo);
@@ -73,5 +73,3 @@ tasksController.delete("/:id", async (req: AuthRequest, res: Response) => {
         return res.status(500).json({ message });
     }
 });
-
-

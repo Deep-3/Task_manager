@@ -1,5 +1,5 @@
-import { type TaskEntity } from "./Task.js";
-import { type TaskStatus } from "./TaskStatus.js";
+import { type TaskEntity } from "./task.entity.js";
+import { type TaskStatus } from "./task-status.js";
 
 export interface CreateTaskDTO {
     id: string;
@@ -23,5 +23,3 @@ export interface TaskRepository {
     update(id: string, input: UpdateTaskDTO): Promise<TaskEntity | null>;
     delete(id: string): Promise<boolean>;
 }
-
-

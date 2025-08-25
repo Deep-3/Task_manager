@@ -1,5 +1,5 @@
-import { type TaskRepository, type CreateTaskDTO } from "../../domain/task/TaskRepository.js";
-import { TaskEntity } from "../../domain/task/Task.js";
+import { type TaskRepository, type CreateTaskDTO } from "./task.repository.js";
+import { TaskEntity } from "./task.entity.js";
 
 export class CreateTaskUseCase {
     constructor(private readonly repo: TaskRepository) {}
@@ -9,5 +9,3 @@ export class CreateTaskUseCase {
         return this.repo.create(payload);
     }
 }
-
-

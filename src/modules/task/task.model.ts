@@ -1,5 +1,5 @@
 import { DataTypes, Model, type Optional } from "sequelize";
-import { sequelize } from "../config/database.js";
+import { sequelize } from "../../config/database.js";
 
 interface TaskAttributes {
     id: string;
@@ -38,3 +38,8 @@ Task.init(
     }
 );
 
+// Define associations
+export function setupTaskAssociations() {
+    const { User } = require("../user/user.model.js");
+    Task.belongsTo(User, { foreignKey: "ownerId", as: "owner" });
+}

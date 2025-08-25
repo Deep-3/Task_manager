@@ -1,4 +1,4 @@
-import { type TaskStatus } from "./TaskStatus.js";
+import { type TaskStatus } from "./task-status.js";
 
 export interface TaskProps {
     id: string;
@@ -29,5 +29,3 @@ export class TaskEntity {
         this.updatedAt = props.updatedAt;
     }
 }
-
-
