@@ -1,11 +1,13 @@
 import { DataTypes, Model, type Optional } from "sequelize";
 import { sequelize } from "../../config/database.js";
+import { Task } from "../task/task.model.js";
+import { UserRole } from "./user.entity";
 
 interface UserAttributes {
     id: string;
     email: string;
-    passwordHash: string;
-    role: "user" | "admin";
+    password: string;
+    role: UserRole;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -15,8 +17,8 @@ type UserCreationAttributes = Optional<UserAttributes, "id" | "role">;
 export class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
     public id!: string;
     public email!: string;
-    public passwordHash!: string;
-    public role!: "user" | "admin";
+    public password!: string;
+    public role!: UserRole;
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
 }
@@ -33,14 +35,14 @@ User.init(
             unique: true,
             validate: { isEmail: true },
         },
-        passwordHash: {
+        password: {
             type: DataTypes.STRING,
             allowNull: false,
         },
         role: {
-            type: DataTypes.ENUM("user", "admin"),
+            type: DataTypes.ENUM(UserRole.USER, UserRole.ADMIN),
             allowNull: false,
-            defaultValue: "user",
+            defaultValue: UserRole.USER,
         },
     },
     {
@@ -52,6 +54,5 @@ User.init(
 
 // Define associations
 export function setupUserAssociations() {
-    const { Task } = require("../task/task.model.js");
     User.hasMany(Task, { foreignKey: "ownerId", as: "tasks" });
 }

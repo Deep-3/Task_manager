@@ -1,33 +1,34 @@
 import { type Request, type Response, type NextFunction } from "express";
 import jwt, { type JwtPayload } from "jsonwebtoken";
+import { ResponseHandler } from "../utils/response-handler";
+import { APP_MESSAGES } from "../constants/http-constants";
 
 export interface AuthRequest extends Request {
     user?: { id: string; email: string; role: "user" | "admin" } & JwtPayload;
 }
-
+interface UserPayload {
+    id: string;
+    email: string;
+    role: "user" | "admin";
+}
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
     const authHeader = req.get("authorization") || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-    if (!token) return res.status(401).json({ message: "Missing Bearer token" });
+    if (!token) return ResponseHandler.unauthorized(res, APP_MESSAGES.ERROR.TOKEN_REQUIRED);
     try {
-        const decoded = jwt.verify(token, "Hello") as JwtPayload & {
-            id: string;
-            email: string;
-            role: "user" | "admin";
-        };
+        const decoded = jwt.verify(token, "Hello") as JwtPayload & UserPayload;
         req.user = { id: decoded.id, email: decoded.email, role: decoded.role };
         next();
     } catch {
-        return res.status(401).json({ message: "Invalid token" });
+        return ResponseHandler.unauthorized(res, APP_MESSAGES.ERROR.INVALID_TOKEN);
     }
 }
 
 export function requireRole(role: "user" | "admin") {
     return (req: AuthRequest, res: Response, next: NextFunction) => {
-        if (!req.user) return res.status(401).json({ message: "Unauthenticated" });
+        if (!req.user) return ResponseHandler.unauthorized(res, APP_MESSAGES.ERROR.UNAUTHORIZED);
         console.log(req.user.role);
-        if (req.user.role !== role) return res.status(403).json({ message: "You can't access this resource" });
+        if (req.user.role !== role) return ResponseHandler.forbidden(res, APP_MESSAGES.ERROR.ACCESS_DENIED);
         next();
     };
 }
-

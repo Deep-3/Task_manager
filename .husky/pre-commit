@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run ESLint
+pnpm eslint src/ --fix
+
+# Run Prettier
+pnpm prettier --write src/
+
+# Add formatted files back to staging
+git add .

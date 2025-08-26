@@ -1,23 +1,14 @@
-import { type UserEntity } from "./user.entity.js";
+import { UserRole } from "./user.entity";
 
 export interface CreateUserDTO {
     id: string;
     email: string;
-    passwordHash: string;
-    role?: "user" | "admin";
+    password: string;
+    role?: UserRole;
 }
 
 export interface UpdateUserDTO {
     email?: string;
-    passwordHash?: string;
-    role?: "user" | "admin";
-}
-
-export interface UserRepository {
-    create(input: CreateUserDTO): Promise<UserEntity>;
-    findByEmail(email: string): Promise<UserEntity | null>;
-    findById(id: string): Promise<UserEntity | null>;
-    listAll(): Promise<UserEntity[]>;
-    update(id: string, input: UpdateUserDTO): Promise<UserEntity | null>;
-    delete(id: string): Promise<boolean>;
+    password?: string;
+    role?: UserRole;
 }

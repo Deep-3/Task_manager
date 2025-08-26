@@ -1,4 +1,4 @@
-import { type TaskStatus } from "./task-status.js";
+import { type TaskStatus } from "./task-status";
 
 export interface TaskProps {
     id: string;

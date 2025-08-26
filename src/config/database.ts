@@ -3,12 +3,16 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-
-export const sequelize = new Sequelize(`postgres://postgres:password@localhost:5432/task_manage`, {
+export const sequelize = new Sequelize({
+    dialect: "postgres",
+    host: process.env.DB_HOST || "localhost",
+    port: parseInt(process.env.DB_PORT || "5432"),
+    database: process.env.DB_NAME || "task_manage",
+    username: process.env.DB_USER || "postgres",
+    password: process.env.DB_PASSWORD || "",
     logging: false,
-  });
+});
 
 export async function connectDatabase() {
     await sequelize.authenticate();
 }
-

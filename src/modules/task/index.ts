@@ -1,19 +1,17 @@
 // Entities
-export { TaskEntity, type TaskProps } from "./task.entity.js";
-export { type TaskStatus } from "./task-status.js";
+export { TaskEntity, type TaskProps } from "./task.entity";
+export { type TaskStatus } from "./task-status";
 
 // Models
-export { Task, setupTaskAssociations } from "./task.model.js";
+export { Task, setupTaskAssociations } from "./task.model";
 
 // Repository
-export { type TaskRepository, type CreateTaskDTO, type UpdateTaskDTO } from "./task.repository.js";
-export { SequelizeTaskRepository } from "./sequelize-task.repository.js";
+export { type CreateTaskDTO, type UpdateTaskDTO } from "./task.repository";
+export { TaskServices } from "./task.service";
 
-// Use Cases
-export { CreateTaskUseCase } from "./create-task.usecase.js";
-export { ListTasksUseCase } from "./list-tasks.usecase.js";
-export { GetTaskUseCase, UpdateTaskUseCase, DeleteTaskUseCase } from "./get-update-delete-task.usecase.js";
+// Utilities
+export { toTaskEntity } from "./task.utils";
 
 // Controller & Routes
-export { tasksController } from "./task.controller.js";
-export { default as taskRoutes } from "./task.routes.js";
+export { tasksController } from "./task.controller";
+export { default as taskRoutes } from "./task.routes";

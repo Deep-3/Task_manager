@@ -15,10 +15,8 @@ app.get("/", (_req: Request, res: Response) => {
     res.json({ success: true, service: "Task Manager API" });
 });
 
-// Public auth routes
 app.use("/auth", userController);
 
-// Protected routes
 app.use("/tasks", authMiddleware, tasksController);
 app.use("/admin", authMiddleware, requireRole("admin"), userController);
 
@@ -27,12 +25,11 @@ const PORT = Number(process.env.PORT || 3000);
 async function start() {
     try {
         await connectDatabase();
-        
-        // Setup model associations
+
         setupAssociations();
-        
+
         const { sequelize } = await import("./config/database.js");
-        await sequelize.sync();
+        await sequelize.sync({ alter: true });
         app.listen(PORT, () => {
             console.log(`Server is running on port ${PORT}`);
         });
@@ -43,4 +40,3 @@ async function start() {
 }
 
 start();
-
