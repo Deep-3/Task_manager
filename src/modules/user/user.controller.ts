@@ -36,10 +36,14 @@ userController.post("/signup", async (req: Request, res: Response) => {
             role: role === "admin" ? UserRole.ADMIN : UserRole.USER,
         });
 
-        const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, "Hello", { expiresIn: "7d" });
+        const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET!, {
+            expiresIn: "7d",
+        });
+
+        res.cookie("token", token, { httpOnly: true, expires: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000) });
         return ResponseHandler.created(res, {
             statuscode: HTTP_STATUS.CREATED,
-            data: { user: { id: user.id, email: user.email, role: user.role }, token },
+            data: { user: { id: user.id, email: user.email, role: user.role } },
         });
     } catch (error) {
         return ResponseHandler.handleError(res, error);
@@ -57,14 +61,25 @@ userController.post("/login", async (req: Request, res: Response) => {
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return ResponseHandler.unauthorized(res, USER_MESSAGES.ERROR.INVALID_CREDENTIALS);
 
-        const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, "Hello", { expiresIn: "1d" });
+        const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET!, {
+            expiresIn: "1d",
+        });
+        res.cookie("token", token, { httpOnly: true, expires: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000) });
         return ResponseHandler.success(res, {
             statuscode: HTTP_STATUS.OK,
-            data: { user: { id: user.id, email: user.email, role: user.role }, token },
+            data: { user: { id: user.id, email: user.email, role: user.role } },
         });
     } catch (error) {
         return ResponseHandler.handleError(res, error);
     }
+});
+
+userController.post("/logout", (_req: AuthRequest, res: Response) => {
+    res.cookie("token", "", { httpOnly: true, expires: new Date() });
+    return ResponseHandler.success(res, {
+        statuscode: HTTP_STATUS.OK,
+        message: USER_MESSAGES.INFO.USER_LOGOUT_SUCCESS,
+    });
 });
 
 // Admin routes

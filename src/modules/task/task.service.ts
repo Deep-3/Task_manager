@@ -56,7 +56,6 @@ export class TaskServices {
 
     async listAll(page: number = 1, limit: number = 10, search: string): Promise<PaginatedTaskResponse> {
         const offset = (page - 1) * limit;
-        console.log("limit", limit);
         const list = await this.taskModel.findAndCountAll({
             where: {
                 [Op.or]: [

@@ -12,11 +12,10 @@ interface UserPayload {
     role: "user" | "admin";
 }
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
-    const authHeader = req.get("authorization") || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const { token } = req.cookies;
     if (!token) return ResponseHandler.unauthorized(res, APP_MESSAGES.ERROR.TOKEN_REQUIRED);
     try {
-        const decoded = jwt.verify(token, "Hello") as JwtPayload & UserPayload;
+        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload & UserPayload;
         req.user = { id: decoded.id, email: decoded.email, role: decoded.role };
         next();
     } catch {

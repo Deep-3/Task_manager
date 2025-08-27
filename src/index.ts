@@ -5,11 +5,13 @@ import { userController } from "./modules/user/index.js";
 import { tasksController } from "./modules/task/index.js";
 import { authMiddleware, requireRole } from "./middleware/auth.js";
 import { setupAssociations } from "./modules/associations.js";
+import cookieParser from "cookie-parser";
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
+app.use(cookieParser());
 
 app.get("/", (_req: Request, res: Response) => {
     res.json({ success: true, service: "Task Manager API" });
