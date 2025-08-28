@@ -1,8 +1,5 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
-# Run ESLint
-pnpm eslint src/ --fix
+# Run ESLint with strict checking (fail on warnings)
+pnpm eslint src/ --fix --max-warnings 0
 
 # Run Prettier
 pnpm prettier --write src/

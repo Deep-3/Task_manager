@@ -48,6 +48,7 @@ export class TaskServices {
             limit,
             offset,
         });
+        console.log(list);
         return {
             rows: list.rows.map(toTaskEntity),
             page,
