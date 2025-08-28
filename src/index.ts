@@ -24,7 +24,7 @@ app.use("/admin", authMiddleware, requireRole("admin"), userController);
 
 const PORT = Number(process.env.PORT || 3000);
 
-async function start() {
+async function start(): Promise<void> {
     try {
         await connectDatabase();
 

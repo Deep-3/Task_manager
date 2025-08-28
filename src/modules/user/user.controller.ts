@@ -1,5 +1,4 @@
-import { type Response, Router } from "express";
-import { type Request } from "express";
+import { type Response, Router, type Request } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { type AuthRequest } from "../../middleware/auth";

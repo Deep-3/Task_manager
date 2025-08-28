@@ -13,6 +13,6 @@ export const sequelize = new Sequelize({
     logging: false,
 });
 
-export async function connectDatabase() {
+export async function connectDatabase(): Promise<void> {
     await sequelize.authenticate();
 }

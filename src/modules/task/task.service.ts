@@ -50,7 +50,7 @@ export class TaskServices {
         });
         return {
             rows: list.rows.map(toTaskEntity),
-            page: page,
+            page,
         };
     }
 
@@ -73,7 +73,7 @@ export class TaskServices {
 
         return {
             rows: list.rows.map(toTaskEntity),
-            page: page,
+            page,
         };
     }
 
