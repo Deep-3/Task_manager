@@ -1,8 +1,4 @@
-# Run ESLint with strict checking (fail on warnings)
-pnpm eslint src/ --fix --max-warnings 0
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
 
-# Run Prettier
-pnpm prettier --write src/
-
-# Add formatted files back to staging
-git add .
+pnpm lint-staged
