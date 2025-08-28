@@ -1,7 +1,6 @@
 import { User } from "./user.model";
-import { UserEntity, UserRole } from "./user.entity";
-import { type CreateUserDTO, type UpdateUserDTO } from "./user.repository";
-import { toEntity } from "./user.utils";
+import { UserProps, UserRole, CreateUserDTO, UpdateUserDTO } from "./user.type";
+import { toUserProps } from "./user.utils";
 import { USER_MESSAGES } from "./user.constant";
 export class UserServices {
     private userModel: typeof User;
@@ -10,46 +9,50 @@ export class UserServices {
         this.userModel = userModel;
     }
 
-    async create(input: CreateUserDTO): Promise<UserEntity> {
+    async create(input: CreateUserDTO): Promise<UserProps> {
         const created = await this.userModel.create({
-            id: input.id,
             email: input.email,
             password: input.password,
             role: input.role ?? UserRole.USER,
         });
-        return toEntity(created);
+        return toUserProps(created);
     }
 
-    async findByEmail(email: string): Promise<UserEntity> {
-        const found = await this.userModel.findOne({ where: { email } });
-        if (!found) {
-            throw new Error(USER_MESSAGES.ERROR.USER_NOT_FOUND);
-        }
-        return toEntity(found);
-    }
+    async findByEmail(email: string): Promise<UserProps | null> {
+        const user = await this.userModel.findOne({
+            where: { email },
+        });
 
-    async findById(id: string): Promise<UserEntity> {
-        const found = await this.userModel.findByPk(id);
-        if (!found) {
-            throw new Error(USER_MESSAGES.ERROR.USER_NOT_FOUND);
-        }
-        return toEntity(found);
-    }
-
-    async listAll(): Promise<UserEntity[]> {
-        const list = await this.userModel.findAll({ attributes: { exclude: ["password", "updatedAt", "createdAt"] } });
-        return list.map(toEntity);
-    }
-
-    async update(id: string, input: UpdateUserDTO): Promise<UserEntity> {
-        const found = await this.userModel.findByPk(id);
-        if (!found) {
-            throw new Error(USER_MESSAGES.ERROR.USER_NOT_FOUND);
+        if (!user) {
+            return null;
         }
 
-        Object.assign(found, input);
-        await found.save();
-        return toEntity(found);
+        return toUserProps(user);
+    }
+
+    async findById(id: string): Promise<UserProps | null> {
+        const user = await this.userModel.findByPk(id);
+        if (!user) {
+            return null;
+        }
+        return toUserProps(user);
+    }
+
+    async listAll(): Promise<UserProps[]> {
+        const users = await this.userModel.findAll();
+        return users.map(toUserProps);
+    }
+
+    async update(id: string, input: UpdateUserDTO): Promise<UserProps> {
+        const user = await this.userModel.findByPk(id);
+
+        if (!user) {
+            throw new Error(USER_MESSAGES.ERROR.USER_NOT_FOUND);
+        }
+
+        Object.assign(user, input);
+        await user.save();
+        return toUserProps(user);
     }
 
     async delete(id: string): Promise<boolean> {

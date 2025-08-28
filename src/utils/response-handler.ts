@@ -14,19 +14,19 @@ export class ResponseHandler {
         return res.status(HTTP_STATUS.NO_CONTENT).send();
     }
 
-    static badRequest(res: Response, message: string = APP_MESSAGES.ERROR.BAD_REQUEST) {
+    static badRequest(res: Response, message = APP_MESSAGES.ERROR.BAD_REQUEST) {
         return res.status(HTTP_STATUS.BAD_REQUEST).json({ statuscode: HTTP_STATUS.BAD_REQUEST, message });
     }
 
-    static unauthorized(res: Response, message: string = APP_MESSAGES.ERROR.UNAUTHORIZED) {
+    static unauthorized(res: Response, message = APP_MESSAGES.ERROR.UNAUTHORIZED) {
         return res.status(HTTP_STATUS.UNAUTHORIZED).json({ statuscode: HTTP_STATUS.UNAUTHORIZED, message });
     }
 
-    static forbidden(res: Response, message: string = APP_MESSAGES.ERROR.FORBIDDEN) {
+    static forbidden(res: Response, message = APP_MESSAGES.ERROR.FORBIDDEN) {
         return res.status(HTTP_STATUS.FORBIDDEN).json({ statuscode: HTTP_STATUS.FORBIDDEN, message });
     }
 
-    static notFound(res: Response, message: string = APP_MESSAGES.ERROR.NOT_FOUND) {
+    static notFound(res: Response, message = APP_MESSAGES.ERROR.NOT_FOUND) {
         return res.status(HTTP_STATUS.NOT_FOUND).json({ statuscode: HTTP_STATUS.NOT_FOUND, message });
     }
 

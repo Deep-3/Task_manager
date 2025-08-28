@@ -1,7 +1,7 @@
 import { DataTypes, Model, type Optional } from "sequelize";
 import { sequelize } from "../../config/database.js";
 import { Task } from "../task/task.model.js";
-import { UserRole } from "./user.entity";
+import { UserRole } from "./user.type.js";
 
 interface UserAttributes {
     id: string;
@@ -26,8 +26,9 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
 User.init(
     {
         id: {
-            type: DataTypes.STRING,
+            type: DataTypes.UUIDV4,
             primaryKey: true,
+            defaultValue: DataTypes.UUIDV4,
         },
         email: {
             type: DataTypes.STRING,
@@ -38,6 +39,9 @@ User.init(
         password: {
             type: DataTypes.STRING,
             allowNull: false,
+            get() {
+                return "********";
+            },
         },
         role: {
             type: DataTypes.ENUM(UserRole.USER, UserRole.ADMIN),
@@ -49,6 +53,18 @@ User.init(
         sequelize,
         modelName: "User",
         tableName: "users",
+        indexes: [
+            {
+                unique: true,
+                fields: ["email"],
+            },
+            {
+                fields: ["role"],
+            },
+            {
+                fields: ["createdAt"],
+            },
+        ],
     }
 );
 

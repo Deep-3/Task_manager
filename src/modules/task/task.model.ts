@@ -1,7 +1,7 @@
 import { DataTypes, Model, type Optional } from "sequelize";
 import { sequelize } from "../../config/database";
 import { User } from "../user/user.model";
-import { TaskStatus } from "./task-status";
+import { TaskStatus } from "./task.type";
 
 interface TaskAttributes {
     id: string;
@@ -27,7 +27,7 @@ export class Task extends Model<TaskAttributes, TaskCreationAttributes> implemen
 
 Task.init(
     {
-        id: { type: DataTypes.STRING, primaryKey: true },
+        id: { type: DataTypes.UUIDV4, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
         title: { type: DataTypes.STRING, allowNull: false },
         description: { type: DataTypes.TEXT, allowNull: true },
         status: {
@@ -35,12 +35,29 @@ Task.init(
             allowNull: false,
             defaultValue: TaskStatus.TODO,
         },
-        ownerId: { type: DataTypes.STRING, allowNull: false },
+        ownerId: { type: DataTypes.UUIDV4, allowNull: false },
     },
     {
         sequelize,
         modelName: "Task",
         tableName: "tasks",
+        indexes: [
+            {
+                fields: ["ownerId"],
+            },
+            {
+                fields: ["status"],
+            },
+            {
+                fields: ["ownerId", "title"],
+            },
+            {
+                fields: ["ownerId", "status"],
+            },
+            {
+                fields: ["ownerId", "createdAt"],
+            },
+        ],
     }
 );
 

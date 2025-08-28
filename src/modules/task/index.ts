@@ -1,16 +1,15 @@
 // Entities
-export { TaskEntity, type TaskProps } from "./task.entity";
-export { type TaskStatus } from "./task-status";
+export { type TaskProps, type CreateTaskDTO, type UpdateTaskDTO } from "./task.type";
+export { type TaskStatus } from "./task.type";
 
 // Models
 export { Task, setupTaskAssociations } from "./task.model";
 
 // Repository
-export { type CreateTaskDTO, type UpdateTaskDTO } from "./task.repository";
 export { TaskServices } from "./task.service";
 
 // Utilities
-export { toTaskEntity } from "./task.utils";
+export { toTaskProps } from "./task.utils";
 
 // Controller & Routes
 export { tasksController } from "./task.controller";

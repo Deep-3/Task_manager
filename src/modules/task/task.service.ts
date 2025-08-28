@@ -1,12 +1,10 @@
-import { Task } from "./task.model.js";
-import { TaskEntity } from "./task.entity.js";
-import { type CreateTaskDTO, type UpdateTaskDTO } from "./task.repository.js";
-import { TaskStatus } from "./task-status.js";
-import { toTaskEntity } from "./task.utils.js";
-import { Task_MESSAGES } from "./task.constant.js";
+import { Task } from "./task.model";
+import { TaskProps, TaskStatus, CreateTaskDTO, UpdateTaskDTO } from "./task.type";
+import { toTaskProps } from "./task.utils";
+import { Task_MESSAGES } from "./task.constant";
 import { Op, Sequelize } from "sequelize";
 export interface PaginatedTaskResponse {
-    rows: TaskEntity[];
+    rows: TaskProps[];
     page: number;
 }
 export class TaskServices {
@@ -15,15 +13,14 @@ export class TaskServices {
     constructor(taskModel: typeof Task) {
         this.taskModel = taskModel;
     }
-    async create(input: CreateTaskDTO): Promise<TaskEntity> {
+    async create(input: CreateTaskDTO): Promise<TaskProps> {
         const created = await this.taskModel.create({
-            id: input.id,
             title: input.title,
             description: input.description ?? null,
             status: input.status ?? TaskStatus.TODO,
             ownerId: input.ownerId,
         });
-        return toTaskEntity(created);
+        return toTaskProps(created);
     }
 
     async listByOwner(
@@ -50,7 +47,7 @@ export class TaskServices {
         });
         console.log(list);
         return {
-            rows: list.rows.map(toTaskEntity),
+            rows: list.rows.map(toTaskProps),
             page,
         };
     }
@@ -73,27 +70,34 @@ export class TaskServices {
         });
 
         return {
-            rows: list.rows.map(toTaskEntity),
+            rows: list.rows.map(toTaskProps),
             page,
         };
     }
 
-    async getById(id: string): Promise<TaskEntity | null> {
+    async getByTask(title: string, ownerId: string): Promise<TaskProps | null> {
+        const found = await this.taskModel.findOne({ where: { title, ownerId } });
+        if (found) {
+            return toTaskProps(found);
+        }
+        return null;
+    }
+    async getById(id: string): Promise<TaskProps | null> {
         const found = await this.taskModel.findByPk(id);
         if (!found) {
             throw new Error(Task_MESSAGES.Error.TASK_NOT_FOUND);
         }
-        return toTaskEntity(found);
+        return toTaskProps(found);
     }
 
-    async update(id: string, input: UpdateTaskDTO): Promise<TaskEntity> {
+    async update(id: string, input: UpdateTaskDTO): Promise<TaskProps> {
         const found = await this.taskModel.findByPk(id);
         if (!found) {
             throw new Error(Task_MESSAGES.Error.TASK_NOT_FOUND);
         }
         Object.assign(found, input);
         await found.save();
-        return toTaskEntity(found);
+        return toTaskProps(found);
     }
 
     async delete(id: Array<string>): Promise<boolean> {

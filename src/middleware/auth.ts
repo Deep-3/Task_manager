@@ -2,14 +2,15 @@ import { type Request, type Response, type NextFunction } from "express";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { ResponseHandler } from "../utils/response-handler";
 import { APP_MESSAGES } from "../constants/http-constants";
+import { UserRole } from "../modules/user/user.type";
 
 export interface AuthRequest extends Request {
-    user?: { id: string; email: string; role: "user" | "admin" } & JwtPayload;
+    user?: { id: string; email: string; role: UserRole } & JwtPayload;
 }
 interface UserPayload {
     id: string;
     email: string;
-    role: "user" | "admin";
+    role: UserRole;
 }
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
     const { token } = req.cookies;
@@ -23,10 +24,9 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
     }
 }
 
-export function requireRole(role: "user" | "admin") {
+export function requireRole(role: UserRole) {
     return (req: AuthRequest, res: Response, next: NextFunction) => {
         if (!req.user) return ResponseHandler.unauthorized(res, APP_MESSAGES.ERROR.UNAUTHORIZED);
-        console.log(req.user.role);
         if (req.user.role !== role) return ResponseHandler.forbidden(res, APP_MESSAGES.ERROR.ACCESS_DENIED);
         next();
     };

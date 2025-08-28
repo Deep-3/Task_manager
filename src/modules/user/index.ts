@@ -1,16 +1,15 @@
-// Entities
-export { UserEntity, type UserProps } from "./user.entity";
+// Types
+export { type UserProps, type CreateUserDTO, type UpdateUserDTO } from "./user.type";
 
 // Models
 export { User, setupUserAssociations } from "./user.model";
 
-// Repository
-export { type CreateUserDTO, type UpdateUserDTO } from "./user.repository";
+// Services
 export { UserServices } from "./user.service";
 
-// Utilities
-export { toEntity } from "./user.utils";
+// Utils
+export { toUserProps } from "./user.utils";
 
-// Controller & Routes
+// Controllers
 export { userController } from "./user.controller";
 export { default as userRoutes } from "./user.routes";
