@@ -6,6 +6,7 @@ import { tasksController } from "./modules/task/index.js";
 import { authMiddleware, requireRole } from "./middleware/auth.js";
 import { setupAssociations } from "./modules/associations.js";
 import cookieParser from "cookie-parser";
+import { logger } from "./constants/winston.js";
 
 dotenv.config();
 
@@ -24,7 +25,7 @@ app.use("/admin", authMiddleware, requireRole("admin"), userController);
 
 const PORT = Number(process.env.PORT || 3000);
 
-async function start(): Promise<void> {
+async function start() {
     try {
         await connectDatabase();
 
@@ -33,10 +34,10 @@ async function start(): Promise<void> {
         const { sequelize } = await import("./config/database.js");
         await sequelize.sync({ alter: true });
         app.listen(PORT, () => {
-            console.log(`Server is running on port ${PORT}`);
+            logger.info(`Server is running on port ${PORT}`);
         });
     } catch (err) {
-        console.error("Failed to start server:", err);
+        logger.error("Failed to start server:", err);
         process.exit(1);
     }
 }
