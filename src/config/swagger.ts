@@ -106,13 +106,13 @@ const options: swaggerJsdoc.Options = {
                 Error: {
                     type: "object",
                     properties: {
-                        message: {
-                            type: "string",
-                            description: "Error message",
-                        },
                         statusCode: {
                             type: "integer",
                             description: "HTTP status code",
+                        },
+                        message: {
+                            type: "string",
+                            description: "Error message",
                         },
                     },
                 },

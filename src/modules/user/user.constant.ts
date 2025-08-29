@@ -18,5 +18,6 @@ export const USER_MESSAGES = {
         USER_ALREADY_EXISTS: "User already exists",
         INVALID_CREDENTIALS: "Invalid credentials",
         USER_CREDENTIALS_REQUIRED: "email and password are required",
+        REFRESH_TOKEN_REQUIRED: "Refresh token is required",
     },
 };

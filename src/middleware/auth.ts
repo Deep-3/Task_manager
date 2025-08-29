@@ -3,20 +3,17 @@ import jwt, { type JwtPayload } from "jsonwebtoken";
 import { ResponseHandler } from "../utils/response-handler";
 import { APP_MESSAGES } from "../constants/http-constants";
 import { UserRole } from "../modules/user/user.type";
+import { UserPayload } from "../constants/type.constant";
 
 export interface AuthRequest extends Request {
-    user?: { id: string; email: string; role: UserRole } & JwtPayload;
+    user?: UserPayload & JwtPayload;
 }
-interface UserPayload {
-    id: string;
-    email: string;
-    role: UserRole;
-}
+
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
     const { token } = req.cookies;
     if (!token) return ResponseHandler.unauthorized(res, APP_MESSAGES.ERROR.TOKEN_REQUIRED);
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload & UserPayload;
+        const decoded = jwt.verify(token, process.env.JWT_SECRET as AnyType) as JwtPayload & UserPayload;
         req.user = { id: decoded.id, email: decoded.email, role: decoded.role };
         next();
     } catch {
