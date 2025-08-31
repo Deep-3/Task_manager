@@ -49,11 +49,13 @@ export class UserController {
 
     const payload = { id: user.id, email: user.email, role: user.role };
     const token = this.jwtService.sign(payload, {
-      expiresIn: '1d',
+      secret: process.env.JWT_SECRET || 'secret',
+      expiresIn: process.env.JWT_EXPIRES_IN || '1d',
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: '7d',
+      secret: process.env.JWT_REFRESH_SECRET || 'refresh-secret',
+      expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
     });
 
     res.cookie('token', token, {
@@ -98,11 +100,13 @@ export class UserController {
 
     const payload = { id: user.id, email: user.email, role: user.role };
     const token = this.jwtService.sign(payload, {
-      expiresIn: '1d',
+      secret: process.env.JWT_SECRET || 'secret',
+      expiresIn: process.env.JWT_EXPIRES_IN || '1d',
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: '7d',
+      secret: process.env.JWT_REFRESH_SECRET || 'refresh-secret',
+      expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
     });
 
     res.cookie('token', token, {

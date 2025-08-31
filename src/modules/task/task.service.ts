@@ -1,107 +1,131 @@
-import { Task } from "./task.model";
-import { TaskProps, TaskStatus, CreateTaskDTO, UpdateTaskDTO } from "./task.type";
-import { toTaskProps } from "./task.utils";
-import { Task_MESSAGES } from "./task.constant";
-import { Op, Sequelize } from "sequelize";
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, ILike } from 'typeorm';
+import { Task } from './entities/task.entity';
+import { CreateTaskDto } from './dto/create-task.dto';
+import { UpdateTaskDto } from './dto/update-task.dto';
+import { TaskStatus } from './enums/task-status.enum';
+
 export interface PaginatedTaskResponse {
-    rows: TaskProps[];
-    page: number;
+  rows: Task[];
+  page: number;
+  total: number;
 }
-export class TaskServices {
-    private taskModel: typeof Task;
 
-    constructor(taskModel: typeof Task) {
-        this.taskModel = taskModel;
+@Injectable()
+export class TaskService {
+  constructor(
+    @InjectRepository(Task)
+    private readonly taskRepository: Repository<Task>,
+  ) {}
+
+  async create(createTaskDto: CreateTaskDto): Promise<Task> {
+    const task = this.taskRepository.create({
+      title: createTaskDto.title,
+      description: createTaskDto.description ?? null,
+      status: createTaskDto.status ?? TaskStatus.TODO,
+      ownerId: createTaskDto.ownerId,
+    });
+
+    try {
+      return await this.taskRepository.save(task);
+    } catch (error) {
+      throw new Error(`Failed to create task: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    async create(input: CreateTaskDTO): Promise<TaskProps> {
-        const created = await this.taskModel.create({
-            title: input.title,
-            description: input.description ?? null,
-            status: input.status ?? TaskStatus.TODO,
-            ownerId: input.ownerId,
-        });
-        return toTaskProps(created);
+  }
+
+  async findByOwner(
+    ownerId: string,
+    page: number = 1,
+    limit: number = 10,
+    search: string = '',
+  ): Promise<PaginatedTaskResponse> {
+    const offset = (page - 1) * limit;
+    
+    const [rows, total] = await this.taskRepository.findAndCount({
+      where: [
+        {
+          ownerId,
+          title: ILike(`%${search}%`),
+        },
+        {
+          ownerId,
+          description: ILike(`%${search}%`),
+        },
+      ],
+      take: limit,
+      skip: offset,
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      rows,
+      page,
+      total,
+    };
+  }
+
+  async findAll(
+    page: number = 1,
+    limit: number = 10,
+    search: string = '',
+  ): Promise<PaginatedTaskResponse> {
+    const offset = (page - 1) * limit;
+    
+    const [rows, total] = await this.taskRepository.findAndCount({
+      where: [
+        { title: ILike(`%${search}%`) },
+        { description: ILike(`%${search}%`) },
+      ],
+      take: limit,
+      skip: offset,
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      rows,
+      page,
+      total,
+    };
+  }
+
+  async findByTitleAndOwner(title: string, ownerId: string): Promise<Task | null> {
+    return await this.taskRepository.findOne({
+      where: { title, ownerId },
+    });
+  }
+
+  async findById(id: string): Promise<Task> {
+    const task = await this.taskRepository.findOne({
+      where: { id },
+      relations: ['owner'],
+    });
+
+    if (!task) {
+      throw new NotFoundException('Task not found');
     }
 
-    async listByOwner(
-        ownerId: string,
-        page: number = 1,
-        limit: number = 10,
-        search: string
-    ): Promise<PaginatedTaskResponse> {
-        const offset = (page - 1) * limit;
-        const list = await this.taskModel.findAndCountAll({
-            where: {
-                ownerId,
-                [Op.or]: [
-                    Sequelize.where(Sequelize.fn("LOWER", Sequelize.col("title")), {
-                        [Op.like]: `%${search.toLowerCase()}%`,
-                    }),
-                    Sequelize.where(Sequelize.fn("LOWER", Sequelize.col("description")), {
-                        [Op.like]: `%${search.toLowerCase()}%`,
-                    }),
-                ],
-            },
-            limit,
-            offset,
-        });
-        console.log(list);
-        return {
-            rows: list.rows.map(toTaskProps),
-            page,
-        };
+    return task;
+  }
+
+  async update(id: string, updateTaskDto: UpdateTaskDto): Promise<Task> {
+    const task = await this.taskRepository.findOne({ where: { id } });
+
+    if (!task) {
+      throw new NotFoundException('Task not found');
     }
 
-    async listAll(page: number = 1, limit: number = 10, search: string): Promise<PaginatedTaskResponse> {
-        const offset = (page - 1) * limit;
-        const list = await this.taskModel.findAndCountAll({
-            where: {
-                [Op.or]: [
-                    Sequelize.where(Sequelize.fn("LOWER", Sequelize.col("title")), {
-                        [Op.like]: `%${search.toLowerCase()}%`,
-                    }),
-                    Sequelize.where(Sequelize.fn("LOWER", Sequelize.col("description")), {
-                        [Op.like]: `%${search.toLowerCase()}%`,
-                    }),
-                ],
-            },
-            limit,
-            offset,
-        });
+    Object.assign(task, updateTaskDto);
+    
+    try {
+      return await this.taskRepository.save(task);
+    } catch (error) {
+      throw new Error(`Failed to update task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 
-        return {
-            rows: list.rows.map(toTaskProps),
-            page,
-        };
-    }
-
-    async getByTask(title: string, ownerId: string): Promise<TaskProps | null> {
-        const found = await this.taskModel.findOne({ where: { title, ownerId } });
-        if (found) {
-            return toTaskProps(found);
-        }
-        return null;
-    }
-    async getById(id: string): Promise<TaskProps | null> {
-        const found = await this.taskModel.findByPk(id);
-        if (!found) {
-            throw new Error(Task_MESSAGES.Error.TASK_NOT_FOUND);
-        }
-        return toTaskProps(found);
-    }
-
-    async update(id: string, input: UpdateTaskDTO): Promise<TaskProps> {
-        const found = await this.taskModel.findByPk(id);
-        if (!found) {
-            throw new Error(Task_MESSAGES.Error.TASK_NOT_FOUND);
-        }
-        Object.assign(found, input);
-        await found.save();
-        return toTaskProps(found);
-    }
-
-    async delete(id: Array<string>): Promise<boolean> {
-        const count = await this.taskModel.destroy({ where: { id } });
-        return count > 0;
-    }
+  async remove(ids: string[]): Promise<boolean> {
+    const result = await this.taskRepository.delete(ids);
+    return (result.affected ?? 0) > 0;
+  }
 }

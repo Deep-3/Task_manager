@@ -1,62 +1,77 @@
-import { User } from "./user.model";
-import { UserProps, UserRole, CreateUserDTO, UpdateUserDTO } from "./user.type";
-import { toUserProps } from "./user.utils";
-import { USER_MESSAGES } from "./user.constant";
-export class UserServices {
-    private userModel: typeof User;
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import * as bcrypt from 'bcryptjs';
+import { User } from './entities/user.entity';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { UserRole } from './enums/user-role.enum';
 
-    constructor(userModel: typeof User) {
-        this.userModel = userModel;
+@Injectable()
+export class UserService {
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+  ) {}
+
+  async create(createUserDto: CreateUserDto): Promise<User> {
+    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+    
+    const user = this.userRepository.create({
+      email: createUserDto.email,
+      password: hashedPassword,
+      role: createUserDto.role ?? UserRole.USER,
+    });
+
+    try {
+      return await this.userRepository.save(user);
+    } catch (error) {
+      throw new Error(`Failed to create user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    return await this.userRepository.findOne({
+      where: { email },
+    });
+  }
+
+  async findById(id: string): Promise<User | null> {
+    return await this.userRepository.findOne({
+      where: { id },
+    });
+  }
+
+  async findAll(): Promise<User[]> {
+    return await this.userRepository.find();
+  }
+
+  async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
 
-    async create(input: CreateUserDTO): Promise<UserProps> {
-        const created = await this.userModel.create({
-            email: input.email,
-            password: input.password,
-            role: input.role ?? UserRole.USER,
-        });
-        return toUserProps(created);
+    if (updateUserDto.password) {
+      updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
     }
 
-    async findByEmail(email: string): Promise<UserProps | null> {
-        const user = await this.userModel.findOne({
-            where: { email },
-        });
-
-        if (!user) {
-            return null;
-        }
-
-        return toUserProps(user);
+    Object.assign(user, updateUserDto);
+    
+    try {
+      return await this.userRepository.save(user);
+    } catch (error) {
+      throw new Error(`Failed to update user: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
 
-    async findById(id: string): Promise<UserProps | null> {
-        const user = await this.userModel.findByPk(id);
-        if (!user) {
-            return null;
-        }
-        return toUserProps(user);
-    }
+  async remove(id: string): Promise<boolean> {
+    const result = await this.userRepository.delete(id);
+    return (result.affected ?? 0) > 0;
+  }
 
-    async listAll(): Promise<UserProps[]> {
-        const users = await this.userModel.findAll();
-        return users.map(toUserProps);
-    }
-
-    async update(id: string, input: UpdateUserDTO): Promise<UserProps> {
-        const user = await this.userModel.findByPk(id);
-
-        if (!user) {
-            throw new Error(USER_MESSAGES.ERROR.USER_NOT_FOUND);
-        }
-
-        Object.assign(user, input);
-        await user.save();
-        return toUserProps(user);
-    }
-
-    async delete(id: string): Promise<boolean> {
-        const count = await this.userModel.destroy({ where: { id } });
-        return count > 0;
-    }
+  async validatePassword(user: User, password: string): Promise<boolean> {
+    return await bcrypt.compare(password, user.password);
+  }
 }
