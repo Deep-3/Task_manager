@@ -19,7 +19,8 @@ import {
 } from '@nestjs/swagger';
 import { TaskService } from './task.service';
 import { CreateTaskDto,UpdateTaskDto } from './task.dto';
-import type{ AuthRequest } from '../../auth/auth.interface';
+import type { AuthRequest } from '../../auth/auth.interface';
+import {type TaskQuery} from './task.type';
 @ApiTags('Tasks')
 @Controller('tasks')
 @ApiBearerAuth()
@@ -58,9 +59,7 @@ export class TaskController {
   @ApiResponse({ status: 200, description: 'Tasks retrieved successfully' })
   async getMyTasks(
     @Req() req: AuthRequest,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('search') search: string = '',
+    @Query() {page=1,limit=10,search=''}:TaskQuery,
   ) {
     try {
     const result = await this.taskService.findByOwner(
@@ -93,9 +92,7 @@ export class TaskController {
   })
   @ApiResponse({ status: 200, description: 'All tasks retrieved successfully' })
   async findAll(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('search') search: string = '',
+    @Query() {page=1,limit=10,search=''}:TaskQuery,
   ) {
     try {
     const result = await this.taskService.findAll(page,limit,search);

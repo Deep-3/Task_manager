@@ -6,12 +6,7 @@ import { CreateTaskDto } from './task.dto';
 import { UpdateTaskDto } from './task.dto';
 import { AuthRequest } from 'src/auth/auth.interface';
 import { UserService } from '../user/user.service';
-
-export interface PaginatedTaskResponse {
-  rows: Task[];
-  page: number;
-  total: number;
-}
+import { TaskPagination } from './task.type';
 
 @Injectable()
 export class TaskService {
@@ -45,7 +40,7 @@ export class TaskService {
     page: number = 1,
     limit: number = 10,
     search: string = '',
-  ): Promise<PaginatedTaskResponse> {
+  ): Promise<TaskPagination> {
     const offset = (page - 1) * limit;
 
     const [rows] = await this.taskRepository.findAndCount({
@@ -75,7 +70,7 @@ export class TaskService {
     page: number = 1,
     limit: number = 10,
     search: string = '',
-  ): Promise<PaginatedTaskResponse> {
+  ): Promise<TaskPagination> {
     const offset = (page - 1) * limit;
 
     const [rows] = await this.taskRepository.findAndCount({
