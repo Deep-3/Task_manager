@@ -5,7 +5,6 @@ import { Task } from './task.entity';
 import { CreateTaskDto } from './task.dto';
 import { UpdateTaskDto } from './task.dto';
 import { AuthRequest } from 'src/auth/auth.interface';
-import { UserService } from '../user/user.service';
 import { TaskPagination } from './task.type';
 
 @Injectable()
@@ -13,12 +12,9 @@ export class TaskService {
   constructor(
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
-    private readonly userService: UserService,
   ) {}
 
   async create(createTaskDto: CreateTaskDto, req: AuthRequest): Promise<Task> {
-    await this.userService.findById(req.user.id);
-
     const task = this.taskRepository.create({
       title: createTaskDto.title,
       description: createTaskDto.description ?? null,
@@ -26,13 +22,7 @@ export class TaskService {
       ownerId: req.user.id,
     });
 
-    try {
-      return await this.taskRepository.save(task);
-    } catch (error) {
-      throw new Error(
-        `Failed to create task: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-    }
+    return await this.taskRepository.save(task);
   }
 
   async findByOwner(
@@ -119,7 +109,6 @@ export class TaskService {
     if (!task) {
       throw new NotFoundException('Task not found');
     }
-
 
     return task;
   }

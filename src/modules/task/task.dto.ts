@@ -1,8 +1,18 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsNumber,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TaskStatus } from './task.type';
 
 export class CreateTaskDto {
+  @ApiPropertyOptional({ example: '0DFGHJ5MGGG2V' })
+  @IsOptional()
+  @IsString()
+  id: string;
   @ApiProperty({ example: 'Complete project documentation' })
   @IsString()
   title: string;
@@ -35,4 +45,28 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsEnum(TaskStatus)
   status?: TaskStatus;
+}
+
+export class TaskQueryDto {
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @IsNumber()
+  page?: number;
+
+  @ApiPropertyOptional({ example: 10 })
+  @IsOptional()
+  @IsNumber()
+  limit?: number;
+
+  @ApiPropertyOptional({ example: 'project' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+}
+
+export class TaskResponseDto {
+  @ApiProperty({ example: 200 })
+  statuscode: number;
+  @ApiProperty({ example: CreateTaskDto })
+  data: CreateTaskDto;
 }

@@ -11,20 +11,18 @@ import {
   UnauthorizedException,
   Req,
   Res,
+  InternalServerErrorException,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { UserService } from './user.service';
-import { CreateUserDto, } from './user.dto';
+import { CreateUserDto, LoginUserDto } from './user.dto';
 import { UpdateUserDto } from './user.dto';
 import { User } from './user.entity';
 import { JwtService } from '@nestjs/jwt';
 import * as authInterface from '../../auth/auth.interface';
+import { appConfig } from 'src/config/app.config';
+import { UserMessage } from './user.costant';
 
 @ApiTags('Users')
 @Controller('auth')
@@ -36,9 +34,6 @@ export class UserController {
 
   @Post('signup')
   @ApiOperation({ summary: 'Register a new user' })
-  @ApiResponse({ status: 201, description: 'User created successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request - validation error' })
-  @ApiResponse({ status: 409, description: 'User already exists' })
   async signup(
     @Body() createUserDto: CreateUserDto,
     @Res({ passthrough: true }) res: Response,
@@ -47,18 +42,18 @@ export class UserController {
       createUserDto.email,
     );
     if (existingUser) {
-      throw new ConflictException('User already exists');
+      throw new ConflictException(UserMessage.Error.USER_ALREADY_EXISTS);
     }
 
     const user = await this.userService.create(createUserDto);
 
     const payload = { id: user.id, email: user.email, role: user.role };
     const token = this.jwtService.sign(payload, {
-      expiresIn: '1d',
+      expiresIn: appConfig.jwtExpiresIn,
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: '7d',
+      expiresIn: appConfig.jwtRefreshExpiresIn,
     });
 
     res.cookie('token', token, {
@@ -84,17 +79,16 @@ export class UserController {
   }
 
   @Post('login')
-  @ApiOperation({ summary: 'Login user' })
-  @ApiResponse({ status: 200, description: 'Login successful' })
-  @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(
-    @Body() loginDto: { email: string; password: string },
+    @Body() loginDto: LoginUserDto,
     @Res({ passthrough: true }) res: Response,
   ) {
     try {
       const user = await this.userService.findByEmail(loginDto.email);
       if (!user) {
-        throw new UnauthorizedException('Invalid credentials');
+        throw new UnauthorizedException(
+          UserMessage.Error.USER_INVALID_CREDENTIALS,
+        );
       }
 
       const isPasswordValid = await this.userService.validatePassword(
@@ -102,16 +96,18 @@ export class UserController {
         loginDto.password,
       );
       if (!isPasswordValid) {
-        throw new UnauthorizedException('Invalid credentials');
+        throw new UnauthorizedException(
+          UserMessage.Error.USER_INVALID_CREDENTIALS,
+        );
       }
 
       const payload = { id: user.id, email: user.email, role: user.role };
       const token = this.jwtService.sign(payload, {
-        expiresIn: '1d',
+        expiresIn: appConfig.jwtExpiresIn,
       });
 
       const refreshToken = this.jwtService.sign(payload, {
-        expiresIn: '7d',
+        expiresIn: appConfig.jwtRefreshExpiresIn,
       });
 
       res.cookie('token', token, {
@@ -135,16 +131,11 @@ export class UserController {
         },
       };
     } catch (error) {
-      throw new Error(
-        `Failed to login user: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+      throw new InternalServerErrorException(error.message);
     }
   }
 
   @Post('logout')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Logout user' })
-  @ApiResponse({ status: 200, description: 'Logout successful' })
   logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie('token');
     res.clearCookie('refreshToken');
@@ -156,40 +147,27 @@ export class UserController {
   }
 
   @Get('users')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get all users (Admin only)' })
-  @ApiResponse({ status: 200, description: 'Users retrieved successfully' })
-  async findAll(@Req() req:authInterface.AuthRequest): Promise<User[]> {
+  async findAll(@Req() req: authInterface.AuthRequest): Promise<User[]> {
     try {
-        console.log(req.user);
+      console.log(req.user);
       return this.userService.findAll();
     } catch (error) {
-      throw new Error(
+      throw new InternalServerErrorException(
         `Failed to get users: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
 
   @Get('users/:id')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get user by ID' })
-  @ApiResponse({ status: 200, description: 'User retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'User not found' })
   async findOne(@Param('id') id: string): Promise<User | null> {
     try {
       return this.userService.findById(id);
     } catch (error) {
-      throw new Error(
-        `Failed to get user: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+      throw new InternalServerErrorException(error.message);
     }
   }
 
   @Patch('users/:id')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update user' })
-  @ApiResponse({ status: 200, description: 'User updated successfully' })
-  @ApiResponse({ status: 404, description: 'User not found' })
   async update(
     @Param('id') id: string,
     @Body() updateUserDto: UpdateUserDto,
@@ -197,47 +175,36 @@ export class UserController {
     try {
       return this.userService.update(id, updateUserDto);
     } catch (error) {
-      throw new Error(
-        `Failed to update user: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+      throw new InternalServerErrorException(error.message);
     }
   }
 
   @Delete('users/:id')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Delete user' })
-  @ApiResponse({ status: 200, description: 'User deleted successfully' })
-  @ApiResponse({ status: 404, description: 'User not found' })
   async remove(@Param('id') id: string) {
     try {
       const deleted = await this.userService.remove(id);
       return {
         statuscode: HttpStatus.OK,
-        message: deleted ? 'User deleted successfully' : 'User not found',
+        message: deleted
+          ? UserMessage.Info.DELETE_USER
+          : UserMessage.Error.USER_NOT_FOUND_TO_DELETE,
       };
     } catch (error) {
-      throw new Error(
-        `Failed to delete user: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+      throw new InternalServerErrorException(error.message);
     }
   }
 
   @Get('me')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get current user profile' })
-  @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
-  getProfile(@Req() req:authInterface.AuthRequest) {  
+  getProfile(@Req() req: authInterface.AuthRequest) {
     try {
-    return {
-      statuscode: HttpStatus.OK,
-      data: {
-        user: req.user,
-      },
-    };
+      return {
+        statuscode: HttpStatus.OK,
+        data: {
+          user: req.user,
+        },
+      };
     } catch (error) {
-      throw new Error(
-        `Failed to get profile: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+      throw new InternalServerErrorException(error.message);
     }
   }
 }

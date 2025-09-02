@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { User } from './user.entity';
-import { CreateUserDto ,UpdateUserDto} from './user.dto';
+import { CreateUserDto, UpdateUserDto } from './user.dto';
 import { UserRole } from './user.type';
 import { plainToInstance } from 'class-transformer';
 
@@ -42,7 +42,7 @@ export class UserService {
         password: true,
         createdAt: true,
         updatedAt: true,
-      }
+      },
     });
   }
 
@@ -54,7 +54,7 @@ export class UserService {
 
   async findAll(): Promise<User[]> {
     const users = await this.userRepository.find();
-     return plainToInstance(User, users)
+    return plainToInstance(User, users);
   }
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
