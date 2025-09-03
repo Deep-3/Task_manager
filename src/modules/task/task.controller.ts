@@ -10,23 +10,40 @@ import {
   Req,
   HttpStatus,
   UseGuards,
+  Res,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
-  ApiQuery,
 } from '@nestjs/swagger';
 import { TaskService } from './task.service';
-import { CreateTaskDto, TaskQueryDto, UpdateTaskDto } from './task.dto';
+import {
+  CreateTaskDto,
+  DeleteTaskDto,
+  TaskQueryDto,
+  UpdateTaskDto,
+} from './task.dto';
 import type { AuthRequest } from '../../auth/auth.interface';
 import { JwtAuthGuard } from '../../middleware/auth.middleware';
 import { RoleGuard } from '../../middleware/auth.middleware';
 import { Roles } from '../../constant/role.decorator';
 import { TaskMessage } from './task.constant';
-import { TaskResponseDto } from './task.dto';
-import { ErrorResponseDto } from '../../common/error-resonse.dto';
+import { ApiErrorResponse } from '../../constant/swagger.decorator';
+import {
+  TaskSingleResponseDto,
+  TaskPaginationDto,
+  TaskResponseDto,
+} from './task.response.dto';
+import type { Response } from 'express';
+import {
+  ResponseHandler,
+  SuccessCommonResponse,
+} from '../../common/response.utils';
+import { Successdata } from 'src/common/response.dto';
+import { TaskPagination } from './task.type';
+
 @ApiTags('Tasks')
 @Controller('tasks')
 @UseGuards(JwtAuthGuard, RoleGuard)
@@ -39,18 +56,18 @@ export class TaskController {
   @ApiResponse({
     status: 200,
     description: 'Task created successfully',
-    type: TaskResponseDto,
+    type: TaskSingleResponseDto,
   })
-  @ApiResponse({
-    status: 404,
-    description: TaskMessage.Error.TASK_NOT_FOUND,
-    type: ErrorResponseDto,
-  })
-  async create(@Body() createTaskDto: CreateTaskDto, @Req() req: AuthRequest) {
+  @ApiErrorResponse()
+  async create(
+    @Res() res: Response,
+    @Body() createTaskDto: CreateTaskDto,
+    @Req() req: AuthRequest,
+  ): Promise<Response<SuccessCommonResponse<TaskResponseDto>>> {
     try {
       const task = await this.taskService.create(createTaskDto, req);
-
-      return {
+      return ResponseHandler.success({
+        res,
         statuscode: HttpStatus.CREATED,
         data: {
           id: task.id,
@@ -58,22 +75,28 @@ export class TaskController {
           description: task.description,
           status: task.status,
         },
-      };
+      });
     } catch (error) {
-      return {
-        statuscode: HttpStatus.NOT_FOUND,
-        message: error.message,
-      };
+      return ResponseHandler.error({
+        res,
+        error,
+      });
     }
   }
 
   @Get('my-tasks')
   @ApiOperation({ summary: 'Get tasks for current user' })
-  @ApiResponse({ status: 200, description: TaskMessage.Info.RETRIEVE_TASKS })
+  @ApiResponse({
+    status: 200,
+    description: TaskMessage.Info.RETRIEVE_TASKS,
+    type: TaskPaginationDto,
+  })
+  @ApiErrorResponse()
   async getMyTasks(
+    @Res() res: Response,
     @Req() req: AuthRequest,
-    @Query() { page = 1, limit = 10, search = '' }: TaskQueryDto,
-  ) {
+    @Query() { page, limit, search }: TaskQueryDto,
+  ): Promise<Response<SuccessCommonResponse<TaskPagination>>> {
     try {
       const result = await this.taskService.findByOwner(
         req.user.id,
@@ -82,107 +105,107 @@ export class TaskController {
         search,
       );
 
-      return {
+      return ResponseHandler.success({
+        res,
         statuscode: HttpStatus.OK,
         data: result,
-      };
+      });
     } catch (error) {
-      return {
-        statuscode: HttpStatus.NOT_FOUND,
-        message: error.message,
-      };
+      return ResponseHandler.error({
+        res,
+        error,
+      });
     }
   }
 
   @Get()
   @Roles('admin')
   @ApiOperation({ summary: 'Get all tasks (Admin only)' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
-  @ApiQuery({
-    name: 'search',
-    required: false,
-    type: String,
-    example: 'project',
+  @ApiResponse({
+    status: 200,
+    description: 'All tasks retrieved successfully',
+    type: TaskPaginationDto,
   })
-  @ApiResponse({ status: 200, description: 'All tasks retrieved successfully' })
-  async findAll(@Query() { page = 1, limit = 10, search = '' }: TaskQueryDto) {
+  @ApiErrorResponse()
+  async findAll(
+    @Res() res: Response,
+    @Query() { page, limit, search }: TaskQueryDto,
+  ): Promise<Response<SuccessCommonResponse<TaskPagination>>> {
     try {
-      const result = await this.taskService.findAll(page, limit, search);
+      const AllTasks = await this.taskService.findAll(page, limit, search);
 
-      return {
+      return ResponseHandler.success({
+        res,
         statuscode: HttpStatus.OK,
-        data: result,
-      };
+        data: AllTasks,
+      });
     } catch (error) {
-      return {
-        statuscode: HttpStatus.NOT_FOUND,
-        message: error.message,
-      };
-    }
-  }
-
-  @Get('search')
-  @ApiOperation({ summary: 'Search task by title and owner' })
-  @ApiQuery({ name: 'title', required: true, type: String })
-  @ApiResponse({ status: 200, description: 'Task found' })
-  @ApiResponse({ status: 404, description: TaskMessage.Error.TASK_NOT_FOUND })
-  async searchByTitle(@Query('title') title: string, @Req() req: AuthRequest) {
-    try {
-      const task = await this.taskService.findByTitleAndOwner(
-        title,
-        req.user.id,
-      );
-
-      return {
-        statuscode: HttpStatus.OK,
-        data: { task },
-      };
-    } catch (error) {
-      return {
-        statuscode: HttpStatus.NOT_FOUND,
-        message: error.message,
-      };
+      return ResponseHandler.error({
+        res,
+        error,
+      });
     }
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get task by ID' })
-  @ApiResponse({ status: 200, description: 'Task retrieved successfully' })
-  @ApiResponse({ status: 404, description: TaskMessage.Error.TASK_NOT_FOUND })
-  async findOne(@Param('id') id: string) {
+  @ApiResponse({
+    status: 200,
+    description: 'Task retrieved successfully',
+    type: TaskSingleResponseDto,
+  })
+  @ApiErrorResponse()
+  async findOne(
+    @Param('id') id: string,
+    @Res() res: Response,
+  ): Promise<
+    Response<SuccessCommonResponse<{ task: TaskResponseDto | null }>>
+  > {
     try {
       const task = await this.taskService.findById(id);
 
-      return {
+      return ResponseHandler.success({
+        res,
         statuscode: HttpStatus.OK,
         data: { task },
-      };
+      });
     } catch (error) {
-      return {
-        statuscode: HttpStatus.NOT_FOUND,
-        message: error.message,
-      };
+      return ResponseHandler.error({
+        res,
+        error,
+      });
     }
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update task' })
-  @ApiResponse({ status: 200, description: 'Task updated successfully' })
-  @ApiResponse({ status: 404, description: TaskMessage.Error.TASK_NOT_FOUND })
-  async update(@Param('id') id: string, @Body() updateTaskDto: UpdateTaskDto) {
+  @ApiResponse({
+    status: 200,
+    description: 'Task updated successfully',
+    type: TaskSingleResponseDto,
+  })
+  @ApiErrorResponse()
+  async update(
+    @Param('id') id: string,
+    @Body() updateTaskDto: UpdateTaskDto,
+    @Res() res: Response,
+  ): Promise<
+    Response<SuccessCommonResponse<{ task: TaskResponseDto | null }>>
+  > {
     try {
       const task = await this.taskService.update(id, updateTaskDto);
+      console.log(task);
 
-      return {
+      return ResponseHandler.success({
+        res,
         statuscode: HttpStatus.OK,
         data: { task },
-      };
+      });
     } catch (error) {
-      return {
-        statuscode: HttpStatus.NOT_FOUND,
-        message: error.message,
-      };
+      return ResponseHandler.error({
+        res,
+        error,
+      });
     }
   }
 
@@ -191,22 +214,30 @@ export class TaskController {
   @ApiResponse({
     status: 200,
     description: TaskMessage.Info.DELETE_TASK,
+    type: DeleteTaskDto,
   })
-  async remove(@Body('ids') ids: string[]) {
+  @ApiErrorResponse()
+  async remove(
+    @Body() { ids }: DeleteTaskDto,
+    @Res() res: Response,
+  ): Promise<Response<SuccessCommonResponse<Successdata>>> {
     try {
       const deleted = await this.taskService.remove(ids);
 
-      return {
+      return ResponseHandler.success({
+        res,
         statuscode: HttpStatus.OK,
-        message: deleted
-          ? TaskMessage.Info.DELETE_TASK
-          : TaskMessage.Error.TASK_NOT_FOUND_TO_DELETE,
-      };
+        data: {
+          message: deleted
+            ? TaskMessage.Info.DELETE_TASK
+            : TaskMessage.Error.TASK_NOT_FOUND_TO_DELETE,
+        },
+      });
     } catch (error) {
-      return {
-        statuscode: HttpStatus.NOT_FOUND,
-        message: error.message,
-      };
+      return ResponseHandler.error({
+        res,
+        error,
+      });
     }
   }
 }

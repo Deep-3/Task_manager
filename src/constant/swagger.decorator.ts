@@ -1,7 +1,7 @@
 // src/constant/swagger.decorator.ts
 import { applyDecorators } from '@nestjs/common';
 import { ApiResponse } from '@nestjs/swagger';
-
+import { ErrorResponseDto } from '.././common/response.dto';
 type ErrorConfig = {
   status: number;
   message: string;
@@ -19,29 +19,27 @@ export function ApiErrorResponse() {
   return createErrorResponseDecorator(defaultErrors);
 }
 
-export function ApiCustomErrorResponse(...errors: ErrorConfig[]) {
-  return createErrorResponseDecorator([...defaultErrors, ...errors]);
-}
-
-export function ApiOnlyTheseErrors(...errors: ErrorConfig[]) {
-  return createErrorResponseDecorator([...errors]);
-}
-
 function createErrorResponseDecorator(errors: ErrorConfig[]) {
   const uniqueErrors = Array.from(
     new Map(errors.map((error) => [error.status, error])).values(),
   );
 
   const responses = uniqueErrors.map(({ status, message }) => {
+    // return ApiResponse({
+    //   status,
+    //   schema: {
+    //     type: ErrorResponseDto,
+    //     properties: {
+    //       statuscode: { type: 'number', example: status },
+    //       message: { type: 'string', example: message },
+    //     },
+    //   },
+    // });
+
     return ApiResponse({
       status,
-      schema: {
-        type: 'object',
-        properties: {
-          statuscode: { type: 'number', example: status },
-          message: { type: 'string', example: message },
-        },
-      },
+      description: message,
+      type: ErrorResponseDto,
     });
   });
 

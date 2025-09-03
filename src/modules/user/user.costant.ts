@@ -1,5 +1,7 @@
 export const UserMessage = {
   Info: {
+    LOGIN_USER: 'Login successfully',
+    LOGOUT_USER: 'Logout successfully',
     CREATE_USER: 'User created successfully',
     UPDATE_USER: 'User updated successfully',
     DELETE_USER: 'User deleted successfully',

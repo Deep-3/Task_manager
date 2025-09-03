@@ -6,6 +6,7 @@ import { CreateTaskDto } from './task.dto';
 import { UpdateTaskDto } from './task.dto';
 import { AuthRequest } from 'src/auth/auth.interface';
 import { TaskPagination } from './task.type';
+import { TaskMessage } from './task.constant';
 
 @Injectable()
 export class TaskService {
@@ -84,9 +85,26 @@ export class TaskService {
     title: string,
     ownerId: string,
   ): Promise<Task | null> {
-    return await this.taskRepository.findOne({
+    const task = await this.taskRepository.findOne({
       where: { title, ownerId },
+      relations: ['owner'],
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        owner: {
+          id: true,
+          email: true,
+        },
+      },
     });
+    if (!task) {
+      throw new NotFoundException(TaskMessage.Error.TASK_NOT_FOUND);
+    }
+    return task;
   }
 
   async findById(id: string): Promise<Task> {
@@ -107,22 +125,38 @@ export class TaskService {
       },
     });
     if (!task) {
-      throw new NotFoundException('Task not found');
+      throw new NotFoundException(TaskMessage.Error.TASK_NOT_FOUND);
     }
 
     return task;
   }
 
   async update(id: string, updateTaskDto: UpdateTaskDto): Promise<Task | null> {
-    const task = await this.taskRepository.findOne({ where: { id } });
-
-    if (!task) {
-      throw new NotFoundException('Task not found');
-    }
-
-    Object.assign(task, updateTaskDto);
-
     try {
+      const task = await this.taskRepository.findOne({
+        where: { id },
+        relations: ['owner'],
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          owner: {
+            id: true,
+            email: true,
+          },
+        },
+      });
+
+      if (!task) {
+        throw new NotFoundException(TaskMessage.Error.TASK_NOT_FOUND);
+      }
+      console.log(task);
+
+      Object.assign(task, updateTaskDto);
+
       return await this.taskRepository.save(task);
     } catch (error) {
       throw new Error(

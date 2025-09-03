@@ -4,9 +4,11 @@ import {
   IsOptional,
   IsString,
   IsNumber,
+  IsArray,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TaskStatus } from './task.type';
+import { Type } from 'class-transformer';
 
 export class CreateTaskDto {
   @ApiPropertyOptional({ example: '0DFGHJ5MGGG2V' })
@@ -47,26 +49,28 @@ export class UpdateTaskDto {
   status?: TaskStatus;
 }
 
+export class DeleteTaskDto {
+  @ApiProperty({ example: ['0DFGHJ5MGGG2V'] })
+  @IsString()
+  @IsArray()
+  ids: string[];
+}
+
 export class TaskQueryDto {
   @ApiPropertyOptional({ example: 1 })
+  @Type(() => Number)
   @IsOptional()
   @IsNumber()
-  page?: number;
+  page?: number = 1;
 
   @ApiPropertyOptional({ example: 10 })
+  @Type(() => Number)
   @IsOptional()
   @IsNumber()
-  limit?: number;
+  limit?: number = 10;
 
   @ApiPropertyOptional({ example: 'project' })
   @IsOptional()
   @IsString()
-  search?: string;
-}
-
-export class TaskResponseDto {
-  @ApiProperty({ example: 200 })
-  statuscode: number;
-  @ApiProperty({ example: CreateTaskDto })
-  data: CreateTaskDto;
+  search?: string = '';
 }
