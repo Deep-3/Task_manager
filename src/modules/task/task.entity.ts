@@ -8,6 +8,7 @@ import {
   JoinColumn,
   Index,
   BeforeInsert,
+  DeleteDateColumn,
 } from 'typeorm';
 import { TaskStatus } from './task.type';
 import { User } from '../user/user.entity';
@@ -44,10 +45,11 @@ export class Task {
   @JoinColumn({ name: 'ownerId' })
   owner: User;
 
+  @DeleteDateColumn()
+  deletedAt: Date;
+
   @BeforeInsert()
   beforeInsert() {
     this.id = ulid();
   }
-
- 
 }

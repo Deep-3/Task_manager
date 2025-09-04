@@ -18,6 +18,20 @@ export class UserResponseDto {
   @ApiProperty({ type: UserDto })
   data: UserDto;
 }
+
+export class UserPaginationDto {
+  @ApiProperty({ example: 200 })
+  statuscode: number;
+
+  @ApiProperty({ type: [UserDto] })
+  data: UserDto[];
+
+  @ApiProperty()
+  page: number;
+
+  @ApiProperty()
+  total: number;
+}
 export class UserListResponseDto {
   @ApiProperty({ example: 200 })
   statuscode: number;

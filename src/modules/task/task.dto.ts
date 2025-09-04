@@ -51,7 +51,7 @@ export class UpdateTaskDto {
 
 export class DeleteTaskDto {
   @ApiProperty({ example: ['0DFGHJ5MGGG2V'] })
-  @IsString()
+  @IsString({ each: true })
   @IsArray()
   ids: string[];
 }

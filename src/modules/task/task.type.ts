@@ -6,7 +6,7 @@ export enum TaskStatus {
 }
 
 export interface TaskPagination {
-  rows: Task[];
+  tasks: Task[];
   page: number;
   total: number;
 }

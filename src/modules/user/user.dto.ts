@@ -4,9 +4,11 @@ import {
   IsOptional,
   IsString,
   MinLength,
+  IsNumber,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from './user.type';
+import { Type } from 'class-transformer';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'user@example.com' })
@@ -39,4 +41,22 @@ export class LoginUserDto {
   @ApiProperty({ example: 'strongPassword123' })
   @IsString()
   password: string;
+}
+
+export class UserQueryDto {
+  @ApiPropertyOptional({ example: 1 })
+  @Type(() => Number)
+  @IsNumber()
+  page?: number;
+
+  @ApiPropertyOptional({ example: 10 })
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  limit?: number;
+
+  @ApiPropertyOptional({ example: 'project' })
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

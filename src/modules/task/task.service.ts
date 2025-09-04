@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Task } from './task.entity';
 import { CreateTaskDto } from './task.dto';
 import { UpdateTaskDto } from './task.dto';
 import { AuthRequest } from 'src/auth/auth.interface';
 import { TaskPagination } from './task.type';
 import { TaskMessage } from './task.constant';
+import { pagination } from '../../common/app.contant';
 
 @Injectable()
 export class TaskService {
@@ -32,28 +33,21 @@ export class TaskService {
     limit: number = 10,
     search: string = '',
   ): Promise<TaskPagination> {
-    const offset = (page - 1) * limit;
-
-    const [rows] = await this.taskRepository.findAndCount({
-      where: [
-        {
-          ownerId,
-          title: ILike(`%${search}%`),
-        },
-        {
-          ownerId,
-          description: ILike(`%${search}%`),
-        },
-      ],
-      take: limit,
-      skip: offset,
-      order: { createdAt: 'DESC' },
-    });
+    const offset = pagination(page, limit);
+    const [tasks, total] = await this.taskRepository
+      .createQueryBuilder('task')
+      .where('task.ownerId = :ownerId', { ownerId })
+      .andWhere('task.title ILIKE :search', { search: `%${search}%` })
+      .andWhere('task.description ILIKE :search', { search: `%${search}%` })
+      .skip(offset)
+      .take(limit)
+      .orderBy('task.createdAt', 'DESC')
+      .getManyAndCount();
 
     return {
-      rows,
+      tasks,
       page,
-      total: rows.length,
+      total,
     };
   }
 
@@ -62,68 +56,41 @@ export class TaskService {
     limit: number = 10,
     search: string = '',
   ): Promise<TaskPagination> {
-    const offset = (page - 1) * limit;
+    const offset = pagination(page, limit);
 
-    const [rows] = await this.taskRepository.findAndCount({
-      where: [
-        { title: ILike(`%${search}%`) },
-        { description: ILike(`%${search}%`) },
-      ],
-      take: limit,
-      skip: offset,
-      order: { createdAt: 'DESC' },
-    });
+    const [tasks, total] = await this.taskRepository
+      .createQueryBuilder('task')
+      .where('task.title ILIKE :search', { search: `%${search}%` })
+      .andWhere('task.description ILIKE :search', { search: `%${search}%` })
+      .skip(offset)
+      .take(limit)
+      .orderBy('task.createdAt', 'DESC')
+      .getManyAndCount();
 
     return {
-      rows,
+      tasks,
       page,
-      total: rows.length,
+      total,
     };
   }
 
-  async findByTitleAndOwner(
-    title: string,
-    ownerId: string,
-  ): Promise<Task | null> {
-    const task = await this.taskRepository.findOne({
-      where: { title, ownerId },
-      relations: ['owner'],
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-        owner: {
-          id: true,
-          email: true,
-        },
-      },
-    });
-    if (!task) {
-      throw new NotFoundException(TaskMessage.Error.TASK_NOT_FOUND);
-    }
-    return task;
-  }
-
   async findById(id: string): Promise<Task> {
-    const task = await this.taskRepository.findOne({
-      where: { id },
-      relations: ['owner'],
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-        owner: {
-          id: true,
-          email: true,
-        },
-      },
-    });
+    const task = await this.taskRepository
+      .createQueryBuilder('task')
+      .leftJoinAndSelect('task.owner', 'owner')
+      .select([
+        'task.id',
+        'task.title',
+        'task.description',
+        'task.status',
+        'task.createdAt',
+        'task.updatedAt',
+        'owner.id',
+        'owner.email',
+      ])
+      .where('task.id = :id', { id })
+      .getOne();
+
     if (!task) {
       throw new NotFoundException(TaskMessage.Error.TASK_NOT_FOUND);
     }
@@ -132,41 +99,26 @@ export class TaskService {
   }
 
   async update(id: string, updateTaskDto: UpdateTaskDto): Promise<Task | null> {
-    try {
-      const task = await this.taskRepository.findOne({
-        where: { id },
-        relations: ['owner'],
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-          owner: {
-            id: true,
-            email: true,
-          },
-        },
-      });
+    const task = await this.taskRepository
+      .createQueryBuilder('task')
+      .where('task.id = :id', { id })
+      .andWhere('task.deletedAt = false')
+      .getOne();
 
-      if (!task) {
-        throw new NotFoundException(TaskMessage.Error.TASK_NOT_FOUND);
-      }
-      console.log(task);
-
-      Object.assign(task, updateTaskDto);
-
-      return await this.taskRepository.save(task);
-    } catch (error) {
-      throw new Error(
-        `Failed to update task: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+    if (!task) {
+      throw new NotFoundException(TaskMessage.Error.TASK_NOT_FOUND);
     }
+
+    Object.assign(task, updateTaskDto);
+
+    return this.taskRepository.save(task);
   }
 
   async remove(ids: string[]): Promise<boolean> {
-    const result = await this.taskRepository.delete(ids);
+    const result = await this.taskRepository.update(
+      { id: In(ids) },
+      { deletedAt: new Date() },
+    );
     return (result.affected ?? 0) > 0;
   }
 }

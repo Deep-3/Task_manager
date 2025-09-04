@@ -13,11 +13,13 @@ import {
   Res,
   HttpCode,
   UseGuards,
+  Version,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { UserService } from './user.service';
-import { CreateUserDto, LoginUserDto } from './user.dto';
+import { CreateUserDto, LoginUserDto, UserQueryDto } from './user.dto';
 import { UpdateUserDto } from './user.dto';
 import { User } from './user.entity';
 import { JwtService } from '@nestjs/jwt';
@@ -28,16 +30,17 @@ import { ApiErrorResponse } from '../../constant/swagger.decorator';
 import { Successdata, SuccessResponseDto } from 'src/common/response.dto';
 import { JwtAuthGuard, RoleGuard } from 'src/middleware/auth.middleware';
 import { Roles } from 'src/constant/role.decorator';
-import { UserRole } from './user.type';
+import { UserPagination, UserRole } from './user.type';
 import {
   UserResponseDto,
-  UserListResponseDto,
   UserDto,
+  UserPaginationDto,
 } from './user.response.dto';
 import {
   ResponseHandler,
   SuccessCommonResponse,
 } from 'src/common/response.utils';
+import { setCookie } from 'src/common/app.contant';
 
 @ApiTags('Users')
 @Controller('auth')
@@ -55,6 +58,7 @@ export class UserController {
     type: UserResponseDto,
   })
   @ApiErrorResponse()
+  @Version('1')
   async signup(
     @Body() createUserDto: CreateUserDto,
     @Res({ passthrough: true }) res: Response,
@@ -78,15 +82,7 @@ export class UserController {
         expiresIn: appConfig.jwtRefreshExpiresIn,
       });
 
-      res.cookie('token', token, {
-        httpOnly: true,
-        expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      });
-
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      });
+      setCookie(res, token, refreshToken);
 
       return ResponseHandler.success({
         res,
@@ -146,15 +142,7 @@ export class UserController {
         expiresIn: appConfig.jwtRefreshExpiresIn,
       });
 
-      res.cookie('token', token, {
-        httpOnly: true,
-        expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      });
-
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      });
+      setCookie(res, token, refreshToken);
 
       return ResponseHandler.success({
         res,
@@ -205,15 +193,15 @@ export class UserController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: UserMessage.Info.RETRIEVE_USERS,
-    type: UserListResponseDto,
+    type: UserPaginationDto,
   })
   @ApiErrorResponse()
   async findAll(
-    @Req() req: authInterface.AuthRequest,
+    @Query() { page = 1, limit = 10, search = '' }: UserQueryDto,
     @Res() res: Response,
-  ): Promise<Response<SuccessCommonResponse<User>>> {
+  ): Promise<Response<SuccessCommonResponse<UserPagination>>> {
     try {
-      const users = await this.userService.findAll();
+      const users = await this.userService.findAll(page, limit, search);
       return ResponseHandler.success({
         res,
         statuscode: HttpStatus.OK,
@@ -289,7 +277,7 @@ export class UserController {
     }
   }
 
-  @Delete('users/:id')
+  @Delete('users')
   @UseGuards(JwtAuthGuard, RoleGuard)
   @Roles(UserRole.ADMIN)
   @ApiResponse({
@@ -299,11 +287,11 @@ export class UserController {
   })
   @ApiErrorResponse()
   async remove(
-    @Param('id') id: string,
+    @Body() { ids }: { ids: string[] },
     @Res() res: Response,
   ): Promise<Response<SuccessCommonResponse<SuccessResponseDto>>> {
     try {
-      const deleted = await this.userService.remove(id);
+      const deleted = await this.userService.remove(ids);
       return ResponseHandler.success({
         res,
         statuscode: HttpStatus.OK,
