@@ -38,6 +38,9 @@ export class User {
   @OneToMany(() => Task, (task) => task.owner)
   tasks: Task[];
 
+  @Column({ nullable: true })
+  refreshToken: string;
+
   @DeleteDateColumn()
   deletedAt: Date;
 
