@@ -10,3 +10,9 @@ export interface UserPagination {
   page: number;
   total: number;
 }
+
+export interface payload {
+  id: string;
+  email: string;
+  role: string;
+}

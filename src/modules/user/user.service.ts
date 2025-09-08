@@ -1,19 +1,42 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
-import * as bcrypt from 'bcryptjs';
+import { Repository, In } from 'typeorm';
 import { User } from './user.entity';
 import { CreateUserDto, UpdateUserDto } from './user.dto';
 import { UserPagination, UserRole } from './user.type';
 import { pagination } from 'src/common/app.contant';
 import { UserMessage } from './user.costant';
+import { Cron } from '@nestjs/schedule';
+import { MailQueueService } from '../mail-queue/mail-queue.service';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly mailQueueService: MailQueueService,
   ) {}
+
+  @Cron('13 17 * * *')
+  async sendmail(): Promise<void> {
+    const users = await this.userRepository.find({ select: ['email'] });
+    if (!users || users.length === 0) {
+      throw new NotFoundException(UserMessage.Error.USER_NOT_FOUND);
+    }
+
+    console.log('Adding emails to queue...');
+
+    await Promise.all(
+      users.map((user) =>
+        this.mailQueueService.addToMailQueue({
+          to: user.email,
+          subject: 'Welcome to our app',
+          text: 'Thank you for joining our platform!',
+        }),
+      ),
+    );
+  }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);

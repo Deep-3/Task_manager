@@ -19,13 +19,17 @@ import {
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { UserService } from './user.service';
-import { CreateUserDto, LoginUserDto, UserQueryDto } from './user.dto';
+import {
+  CreateUserDto,
+  LoginUserDto,
+  UserQueryDto,
+  verifyOtpDto,
+} from './user.dto';
 import { UpdateUserDto } from './user.dto';
 import { User } from './user.entity';
 import { JwtService } from '@nestjs/jwt';
 import * as authInterface from '../../auth/auth.interface';
-import { appConfig } from 'src/config/app.config';
-import { UserMessage } from './user.costant';
+import { UserMessage, LoginType } from './user.costant';
 import { ApiErrorResponse } from '../../constant/swagger.decorator';
 import { Successdata, SuccessResponseDto } from 'src/common/response.dto';
 import { JwtAuthGuard, RoleGuard } from 'src/middleware/auth.middleware';
@@ -40,7 +44,9 @@ import {
   ResponseHandler,
   SuccessCommonResponse,
 } from 'src/common/response.utils';
-import { setCookie } from 'src/common/app.contant';
+import { generateOtp, generateToken, setCookie } from 'src/common/app.contant';
+import { OtpService } from 'src/common/otp.service';
+import { MailQueueService } from '../mail-queue/mail-queue.service';
 
 @ApiTags('Users')
 @Controller('auth')
@@ -48,6 +54,8 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
+    private readonly otpService: OtpService,
+    private readonly mailQueueService: MailQueueService,
   ) {}
 
   @Post('signup')
@@ -74,13 +82,7 @@ export class UserController {
       const user = await this.userService.create(createUserDto);
 
       const payload = { id: user.id, email: user.email, role: user.role };
-      const token = this.jwtService.sign(payload, {
-        expiresIn: appConfig.jwtExpiresIn,
-      });
-
-      const refreshToken = this.jwtService.sign(payload, {
-        expiresIn: appConfig.jwtRefreshExpiresIn,
-      });
+      const { token, refreshToken } = generateToken(payload, this.jwtService);
 
       setCookie(res, token, refreshToken);
 
@@ -122,33 +124,39 @@ export class UserController {
           UserMessage.Error.USER_INVALID_CREDENTIALS,
         );
       }
-
-      const isPasswordValid = await this.userService.validatePassword(
-        user,
-        loginDto.password,
-      );
-      if (!isPasswordValid) {
-        throw new UnauthorizedException(
-          UserMessage.Error.USER_INVALID_CREDENTIALS,
+      if (loginDto.loginType === LoginType.password) {
+        const isPasswordValid = await this.userService.validatePassword(
+          user,
+          loginDto.password,
         );
+        if (!isPasswordValid) {
+          throw new UnauthorizedException(
+            UserMessage.Error.USER_INVALID_CREDENTIALS,
+          );
+        }
+
+        const payload = { id: user.id, email: user.email, role: user.role };
+        const { token, refreshToken } = generateToken(payload, this.jwtService);
+
+        setCookie(res, token, refreshToken);
+      } else {
+        const otp = generateOtp();
+
+        await this.otpService.setOtp(user.email, otp.toString());
+        await this.mailQueueService.addToMailQueue({
+          to: user.email,
+          subject: UserMessage.Info.OTP_SENT,
+          text: otp.toString(),
+        });
       }
-
-      const payload = { id: user.id, email: user.email, role: user.role };
-      const token = this.jwtService.sign(payload, {
-        expiresIn: appConfig.jwtExpiresIn,
-      });
-
-      const refreshToken = this.jwtService.sign(payload, {
-        expiresIn: appConfig.jwtRefreshExpiresIn,
-      });
-
-      setCookie(res, token, refreshToken);
-
       return ResponseHandler.success({
         res,
         statuscode: HttpStatus.OK,
         data: {
-          message: UserMessage.Info.LOGIN_USER,
+          message:
+            LoginType.otp === loginDto.loginType
+              ? UserMessage.Info.OTP_SENT
+              : UserMessage.Info.LOGIN_USER,
         },
       });
     } catch (error) {
@@ -327,6 +335,48 @@ export class UserController {
         statuscode: HttpStatus.OK,
         data: {
           user: req.user,
+        },
+      });
+    } catch (error) {
+      return ResponseHandler.error({
+        res,
+        error,
+      });
+    }
+  }
+
+  @Post('verify-otp')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: UserMessage.Info.OTP_VERIFIED,
+    type: SuccessResponseDto,
+  })
+  async verifyOtp(@Body() body: verifyOtpDto, @Res() res: Response) {
+    try {
+      const storedOtp = await this.otpService.getOtp(body.email);
+      console.log(storedOtp);
+      if (!storedOtp || storedOtp !== body.otp) {
+        throw new UnauthorizedException('Invalid or expired OTP');
+      }
+
+      const user = await this.userService.findByEmail(body.email);
+
+      if (!user) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      const payload = { id: user.id, email: user.email, role: user.role };
+
+      const { token, refreshToken } = generateToken(payload, this.jwtService);
+
+      setCookie(res, token, refreshToken);
+      await this.otpService.deleteOtp(body.email);
+
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: {
+          message: UserMessage.Info.OTP_VERIFIED,
         },
       });
     } catch (error) {
