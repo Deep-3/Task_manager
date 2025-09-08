@@ -11,4 +11,8 @@ export const appConfig = {
   dbUsername: requireEnv('DB_USERNAME'),
   dbPassword: requireEnv('DB_PASSWORD'),
   dbName: requireEnv('DB_NAME'),
+  smtpHost: requireEnv('SMTP_HOST'),
+  smtpPort: requireEnv('SMTP_PORT'),
+  smtpUser: requireEnv('SMTP_USER'),
+  smtpPass: requireEnv('SMTP_PASS'),
 };

@@ -1,18 +1,42 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import * as bcrypt from 'bcryptjs';
+import { Repository, In } from 'typeorm';
 import { User } from './user.entity';
 import { CreateUserDto, UpdateUserDto } from './user.dto';
-import { UserRole } from './user.type';
-import { plainToInstance } from 'class-transformer';
+import { UserPagination, UserRole } from './user.type';
+import { pagination } from 'src/common/app.contant';
+import { UserMessage } from './user.costant';
+import { Cron } from '@nestjs/schedule';
+import { MailQueueService } from '../mail-queue/mail-queue.service';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly mailQueueService: MailQueueService,
   ) {}
+
+  @Cron('13 17 * * *')
+  async sendmail(): Promise<void> {
+    const users = await this.userRepository.find({ select: ['email'] });
+    if (!users || users.length === 0) {
+      throw new NotFoundException(UserMessage.Error.USER_NOT_FOUND);
+    }
+
+    console.log('Adding emails to queue...');
+
+    await Promise.all(
+      users.map((user) =>
+        this.mailQueueService.addToMailQueue({
+          to: user.email,
+          subject: 'Welcome to our app',
+          text: 'Thank you for joining our platform!',
+        }),
+      ),
+    );
+  }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
@@ -23,45 +47,55 @@ export class UserService {
       role: createUserDto.role ?? UserRole.USER,
     });
 
-    try {
-      return await this.userRepository.save(user);
-    } catch (error) {
-      throw new Error(
-        `Failed to create user: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-    }
+    return await this.userRepository.save(user);
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return await this.userRepository.findOne({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        password: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    return this.userRepository
+      .createQueryBuilder('user')
+      .select([
+        'user.id',
+        'user.email',
+        'user.role',
+        'user.password',
+        'user.createdAt',
+      ])
+      .where('user.email = :email', { email })
+      .getOne();
   }
 
   async findById(id: string): Promise<User | null> {
-    return await this.userRepository.findOne({
-      where: { id },
-    });
+    return this.userRepository
+      .createQueryBuilder('user')
+      .where('user.id = :id', { id })
+      .getOne();
   }
 
-  async findAll(): Promise<User[]> {
-    const users = await this.userRepository.find();
-    return plainToInstance(User, users);
+  async findAll(
+    page: number,
+    limit: number,
+    search: string,
+  ): Promise<UserPagination> {
+    const offset = pagination(page, limit);
+    const [users, total] = await this.userRepository
+      .createQueryBuilder('user')
+      .where('user.email ILIKE :search', { search: `%${search}%` })
+      .skip(offset)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      users,
+      page,
+      total,
+    };
   }
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
-    const user = await this.userRepository.findOne({ where: { id } });
+    const user = await this.userRepository.findOneBy({ id });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(UserMessage.Error.USER_NOT_FOUND);
     }
 
     if (updateUserDto.password) {
@@ -70,21 +104,18 @@ export class UserService {
 
     Object.assign(user, updateUserDto);
 
-    try {
-      return await this.userRepository.save(user);
-    } catch (error) {
-      throw new Error(
-        `Failed to update user: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-    }
+    return this.userRepository.save(user);
   }
 
-  async remove(id: string): Promise<boolean> {
-    const result = await this.userRepository.delete(id);
+  async remove(ids: string[]): Promise<boolean> {
+    const result = await this.userRepository.update(
+      { id: In(ids) },
+      { deletedAt: new Date() },
+    );
     return (result.affected ?? 0) > 0;
   }
 
   async validatePassword(user: User, password: string): Promise<boolean> {
-    return await bcrypt.compare(password, user.password);
+    return bcrypt.compare(password, user.password);
   }
 }

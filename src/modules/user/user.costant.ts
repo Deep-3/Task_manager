@@ -2,6 +2,8 @@ export const UserMessage = {
   Info: {
     LOGIN_USER: 'Login successfully',
     LOGOUT_USER: 'Logout successfully',
+    OTP_VERIFIED: 'OTP verified successfully',
+    OTP_SENT: 'OTP sent to your email',
     CREATE_USER: 'User created successfully',
     UPDATE_USER: 'User updated successfully',
     DELETE_USER: 'User deleted successfully',
@@ -13,4 +15,9 @@ export const UserMessage = {
     USER_ALREADY_EXISTS: 'User already exists',
     USER_NOT_FOUND_TO_DELETE: 'No users found to delete',
   },
+};
+
+export const LoginType = {
+  password: 0,
+  otp: 1,
 };

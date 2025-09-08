@@ -7,6 +7,7 @@ import {
   Index,
   BeforeInsert,
   PrimaryColumn,
+  DeleteDateColumn,
 } from 'typeorm';
 import { UserRole } from './user.type';
 import { Task } from '../task/task.entity';
@@ -36,6 +37,9 @@ export class User {
 
   @OneToMany(() => Task, (task) => task.owner)
   tasks: Task[];
+
+  @DeleteDateColumn()
+  deletedAt: Date;
 
   @BeforeInsert()
   beforeInsert() {
