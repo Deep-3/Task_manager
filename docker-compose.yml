@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "${PORT}:3000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - default
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgresdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql 
+    restart: unless-stopped
+    networks:
+      - default
+
+volumes:
+  postgresdata:
+
+networks:
+  default:
+    name: app_network
+    driver: bridge

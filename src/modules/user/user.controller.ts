@@ -1,345 +1,389 @@
-import { type Response, Router, type Request } from "express";
-import bcrypt from "bcryptjs";
-import jwt, { type JwtPayload } from "jsonwebtoken";
-import { type AuthRequest } from "../../middleware/auth";
-import { UserServices } from "./user.service";
-import { User } from "./user.model";
-import { ResponseHandler } from "../../utils/response-handler";
-import { USER_MESSAGES } from "./user.constant";
-import { UserRole } from "./user.type";
-import { HTTP_STATUS } from "../../constants/http-constants";
-import { validateBody } from "../../middleware/validation";
-import { createUserSchema, loginUserSchema, type CreateUserInput, type LoginUserInput } from "./user.validation";
-import { UserPayload } from "../../constants/type.constant";
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  HttpStatus,
+  ConflictException,
+  UnauthorizedException,
+  Req,
+  Res,
+  HttpCode,
+  UseGuards,
+  Version,
+  Query,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import type { Response } from 'express';
+import { UserService } from './user.service';
+import {
+  CreateUserDto,
+  LoginUserDto,
+  UserQueryDto,
+  verifyOtpDto,
+} from './user.dto';
+import { UpdateUserDto } from './user.dto';
+import { User } from './user.entity';
+import { JwtService } from '@nestjs/jwt';
+import * as authInterface from '../../auth/auth.interface';
+import { UserMessage, LoginType } from './user.costant';
+import { ApiErrorResponse } from '../../constant/swagger.decorator';
+import { Successdata, SuccessResponseDto } from 'src/common/response.dto';
+import { JwtAuthGuard, RoleGuard } from 'src/middleware/auth.middleware';
+import { Roles } from 'src/constant/role.decorator';
+import { UserPagination, UserRole } from './user.type';
+import {
+  UserResponseDto,
+  UserDto,
+  UserPaginationDto,
+} from './user.response.dto';
+import {
+  ResponseHandler,
+  SuccessCommonResponse,
+} from 'src/common/response.utils';
+import { generateOtp, generateToken, setCookie } from 'src/common/app.contant';
+import { OtpService } from 'src/common/otp.service';
+import { MailQueueService } from '../mail-queue/mail-queue.service';
 
-const userService = new UserServices(User);
+@ApiTags('Users')
+@Controller('auth')
+export class UserController {
+  constructor(
+    private readonly userService: UserService,
+    private readonly jwtService: JwtService,
+    private readonly otpService: OtpService,
+    private readonly mailQueueService: MailQueueService,
+  ) {}
 
-export const userController: ReturnType<typeof Router> = Router();
-
-/**
- * @swagger
- * /auth/signup:
- *   post:
- *     summary: Register a new user
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: user@example.com
- *               password:
- *                 type: string
- *                 minLength: 8
- *                 example: Password123!
- *               role:
- *                 type: string
- *                 enum: [user, admin]
- *                 example: user
- *     responses:
- *       201:
- *         description: User created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 statuscode:
- *                   type: integer
- *                   example: 201
- *                 data:
- *                   type: object
- *                   properties:
- *                     user:
- *                       $ref: '#/components/schemas/User'
- *       400:
- *         description: Bad request - validation error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-// Auth routes
-userController.post("/signup", validateBody(createUserSchema), async (req: Request, res: Response) => {
+  @Post('signup')
+  @ApiOperation({ summary: 'Register a new user' })
+  @ApiResponse({
+    status: 200,
+    description: 'User created successfully',
+    type: UserResponseDto,
+  })
+  @ApiErrorResponse()
+  @Version('1')
+  async signup(
+    @Body() createUserDto: CreateUserDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     try {
-        const { email, password, role } = req.body as CreateUserInput;
+      const existingUser = await this.userService.findByEmail(
+        createUserDto.email,
+      );
+      if (existingUser) {
+        throw new ConflictException(UserMessage.Error.USER_ALREADY_EXISTS);
+      }
 
-        const exists = await userService.findByEmail(email);
-        if (exists) return ResponseHandler.badRequest(res, USER_MESSAGES.ERROR.USER_ALREADY_EXISTS);
+      const user = await this.userService.create(createUserDto);
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const user = await userService.create({
-            email,
-            password: hashedPassword,
-            role: role === "admin" ? UserRole.ADMIN : UserRole.USER,
-        });
+      const payload = { id: user.id, email: user.email, role: user.role };
+      const { token, refreshToken } = generateToken(payload, this.jwtService);
 
-        const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET as AnyType, {
-            expiresIn: process.env.JWT_EXPIRES_IN as AnyType,
-        });
+      setCookie(res, token, refreshToken);
 
-        const RefreshToken = jwt.sign(
-            { id: user.id, email: user.email, role: user.role },
-            process.env.JWT_REFRESH_SECRET as AnyType,
-            {
-                expiresIn: process.env.JWT_REFRESH_EXPIRES_IN as AnyType,
-            }
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.CREATED,
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+          },
+        },
+      });
+    } catch (error) {
+      return ResponseHandler.error({
+        res,
+        error,
+      });
+    }
+  }
+
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: UserMessage.Info.LOGIN_USER,
+    type: SuccessResponseDto,
+  })
+  @ApiErrorResponse()
+  async login(
+    @Body() loginDto: LoginUserDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    try {
+      const user = await this.userService.findByEmail(loginDto.email);
+      if (!user) {
+        throw new UnauthorizedException(
+          UserMessage.Error.USER_INVALID_CREDENTIALS,
         );
-
-        res.cookie("token", token, { httpOnly: true, expires: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000) });
-        res.cookie("refreshToken", RefreshToken, {
-            httpOnly: true,
-            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        });
-        return ResponseHandler.created(res, {
-            statuscode: HTTP_STATUS.CREATED,
-            data: { user: { id: user.id, email: user.email, role: user.role } },
-        });
-    } catch (error) {
-        return ResponseHandler.handleError(res, error);
-    }
-});
-
-/**
- * @swagger
- * /auth/login:
- *   post:
- *     summary: Login user
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: user@example.com
- *               password:
- *                 type: string
- *                 example: Password123!
- *     responses:
- *       200:
- *         description: Login successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 statuscode:
- *                   type: integer
- *                   example: 200
- *                 data:
- *                   type: object
- *                   properties:
- *                     user:
- *                       type: object
- *                       properties:
- *                         id:
- *                           type: string
- *                           format: uuid
- *                           example: 123e4567-e89b-12d3-a456-426614174000
- *                         email:
- *                           type: string
- *                           format: email
- *                           example: user@example.com
- *                         role:
- *                           type: string
- *                           enum: [user, admin]
- *                           example: user
- *       401:
- *         description: Invalid credentials
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-userController.post("/login", validateBody(loginUserSchema), async (req: Request, res: Response) => {
-    try {
-        const { email, password } = req.body as LoginUserInput;
-
-        const user = await userService.findByEmail(email);
-        console.log(user);
-        if (!user) return ResponseHandler.unauthorized(res, USER_MESSAGES.ERROR.INVALID_CREDENTIALS);
-
-        const ok = await bcrypt.compare(password, user.password);
-        if (!ok) return ResponseHandler.unauthorized(res, USER_MESSAGES.ERROR.INVALID_CREDENTIALS);
-
-        const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET as AnyType, {
-            expiresIn: process.env.JWT_EXPIRES_IN as AnyType,
-        });
-        const RefreshToken = jwt.sign(
-            { id: user.id, email: user.email, role: user.role },
-            process.env.JWT_REFRESH_SECRET as AnyType,
-            {
-                expiresIn: process.env.JWT_REFRESH_EXPIRES_IN as AnyType,
-            }
+      }
+      if (loginDto.loginType === LoginType.password) {
+        const isPasswordValid = await this.userService.validatePassword(
+          user,
+          loginDto.password,
         );
-        res.cookie("token", token, { httpOnly: true, expires: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000) });
-        res.cookie("refreshToken", RefreshToken, {
-            httpOnly: true,
-            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        if (!isPasswordValid) {
+          throw new UnauthorizedException(
+            UserMessage.Error.USER_INVALID_CREDENTIALS,
+          );
+        }
+
+        const payload = { id: user.id, email: user.email, role: user.role };
+        const { token, refreshToken } = generateToken(payload, this.jwtService);
+
+        setCookie(res, token, refreshToken);
+      } else {
+        const otp = generateOtp();
+
+        await this.otpService.setOtp(user.email, otp.toString());
+        await this.mailQueueService.addToMailQueue({
+          to: user.email,
+          subject: UserMessage.Info.OTP_SENT,
+          text: otp.toString(),
         });
-        return ResponseHandler.success(res, {
-            statuscode: HTTP_STATUS.OK,
-            data: { user: { id: user.id, email: user.email, role: user.role } },
-        });
+      }
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: {
+          message:
+            LoginType.otp === loginDto.loginType
+              ? UserMessage.Info.OTP_SENT
+              : UserMessage.Info.LOGIN_USER,
+        },
+      });
     } catch (error) {
-        return ResponseHandler.handleError(res, error);
+      return ResponseHandler.error({
+        res,
+        error,
+      });
     }
-});
+  }
 
-/**
- * @swagger
- * /auth/logout:
- *   post:
- *     summary: Logout user
- *     tags: [Authentication]
- *     security:
- *       - cookieAuth: []
- *     responses:
- *       200:
- *         description: Logout successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 statuscode:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: User logged out successfully
- */
-userController.post("/logout", (_req: AuthRequest, res: Response) => {
-    res.cookie("token", "", { httpOnly: true, expires: new Date() });
-    return ResponseHandler.success(res, {
-        statuscode: HTTP_STATUS.OK,
-        message: USER_MESSAGES.INFO.USER_LOGOUT_SUCCESS,
-    });
-});
-
-/**
- * @swagger
- * /auth/refresh-token:
- *   post:
- *     summary: Refresh token
- *     tags: [Authentication]
- *     security:
- *       - cookieAuth: []
- *     responses:
- *       200:
- *         description: Token refreshed successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 statuscode:
- *                   type: integer
- *                   example: 200
- *                 data:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                       format: uuid
- *                       example: 123e4567-e89b-12d3-a456-426614174000
- *                     email:
- *                       type: string
- *                       format: email
- *                       example: user@example.com
- *                     role:
- *                       type: string
- *                       enum: [user, admin]
- *                       example: user
- *       401:
- *         description: Invalid refresh token
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-userController.post("/refresh-token", (req: AuthRequest, res: Response) => {
+  @Post('logout')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: UserMessage.Info.LOGOUT_USER,
+    type: SuccessResponseDto,
+  })
+  logout(
+    @Res({ passthrough: true }) res: Response,
+  ): Response<SuccessCommonResponse<Successdata>> {
     try {
-        const { refreshToken } = req.cookies;
-        if (!refreshToken) return ResponseHandler.unauthorized(res, USER_MESSAGES.ERROR.REFRESH_TOKEN_REQUIRED);
-        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET as AnyType) as JwtPayload & UserPayload;
-        console.log(decoded);
-        const token = jwt.sign(
-            { id: decoded.id, email: decoded.email, role: decoded.role },
-            process.env.JWT_SECRET as AnyType,
-            {
-                expiresIn: process.env.JWT_EXPIRES_IN as AnyType,
-            }
-        );
-        res.cookie("token", token, { httpOnly: true, expires: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000) });
-        return ResponseHandler.success(res, {
-            statuscode: HTTP_STATUS.OK,
-            data: { user: { id: decoded.id, email: decoded.email, role: decoded.role } },
-        });
-    } catch (error) {
-        return ResponseHandler.handleError(res, error);
-    }
-});
+      res.clearCookie('token');
+      res.clearCookie('refreshToken');
 
-/**
- * @swagger
- * /admin/users:
- *   get:
- *     summary: Get all users (Admin only)
- *     tags: [Admin]
- *     security:
- *       - cookieAuth: []
- *     responses:
- *       200:
- *         description: List of all users
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 statuscode:
- *                   type: integer
- *                   example: 200
- *                 data:
- *                   type: object
- *                   properties:
- *                     users:
- *                       type: array
- *                       items:
- *                         $ref: '#/components/schemas/User'
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - Admin access required
- */
-// Admin routes
-userController.get("/users", async (req: AuthRequest, res: Response) => {
-    try {
-        const users = await userService.listAll();
-        return ResponseHandler.success(res, { statuscode: HTTP_STATUS.OK, data: { users } });
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: {
+          message: UserMessage.Info.LOGOUT_USER,
+        },
+      });
     } catch (error) {
-        return ResponseHandler.handleError(res, error);
+      return ResponseHandler.error({
+        res,
+        error,
+      });
     }
-});
+  }
+
+  @Get('users')
+  @UseGuards(JwtAuthGuard, RoleGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: UserMessage.Info.RETRIEVE_USERS,
+    type: UserPaginationDto,
+  })
+  @ApiErrorResponse()
+  async findAll(
+    @Query() { page = 1, limit = 10, search = '' }: UserQueryDto,
+    @Res() res: Response,
+  ): Promise<Response<SuccessCommonResponse<UserPagination>>> {
+    try {
+      const users = await this.userService.findAll(page, limit, search);
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: users,
+      });
+    } catch (error) {
+      return ResponseHandler.error({
+        res,
+        error,
+      });
+    }
+  }
+
+  @Get('users/:id')
+  @UseGuards(JwtAuthGuard, RoleGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: UserMessage.Info.RETRIEVE_USERS,
+    type: UserResponseDto,
+  })
+  @ApiErrorResponse()
+  async findOne(
+    @Param('id') id: string,
+    @Res() res: Response,
+  ): Promise<Response<SuccessCommonResponse<{ user: User }>>> {
+    try {
+      const user = await this.userService.findById(id);
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: {
+          user,
+        },
+      });
+    } catch (error) {
+      return ResponseHandler.error({
+        res,
+        error,
+      });
+    }
+  }
+
+  @Patch('users/:id')
+  @UseGuards(JwtAuthGuard, RoleGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: UserMessage.Info.RETRIEVE_USERS,
+    type: UserResponseDto,
+  })
+  @ApiErrorResponse()
+  async update(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @Res() res: Response,
+  ): Promise<Response<SuccessCommonResponse<Successdata>>> {
+    try {
+      await this.userService.update(id, updateUserDto);
+
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: {
+          message: UserMessage.Info.UPDATE_USER,
+        },
+      });
+    } catch (error) {
+      return ResponseHandler.error({
+        res,
+        error,
+      });
+    }
+  }
+
+  @Delete('users')
+  @UseGuards(JwtAuthGuard, RoleGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: UserMessage.Info.DELETE_USER,
+    type: SuccessResponseDto,
+  })
+  @ApiErrorResponse()
+  async remove(
+    @Body() { ids }: { ids: string[] },
+    @Res() res: Response,
+  ): Promise<Response<SuccessCommonResponse<SuccessResponseDto>>> {
+    try {
+      const deleted = await this.userService.remove(ids);
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: {
+          message: deleted
+            ? UserMessage.Info.DELETE_USER
+            : UserMessage.Error.USER_NOT_FOUND_TO_DELETE,
+        },
+      });
+    } catch (error) {
+      return ResponseHandler.error({
+        res,
+        error,
+      });
+    }
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: UserMessage.Info.RETRIEVE_USERS,
+    type: UserResponseDto,
+  })
+  @ApiErrorResponse()
+  getProfile(
+    @Req() req: authInterface.AuthRequest,
+    @Res() res: Response,
+  ): Response<SuccessCommonResponse<{ user: UserDto }>> {
+    try {
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: {
+          user: req.user,
+        },
+      });
+    } catch (error) {
+      return ResponseHandler.error({
+        res,
+        error,
+      });
+    }
+  }
+
+  @Post('verify-otp')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: UserMessage.Info.OTP_VERIFIED,
+    type: SuccessResponseDto,
+  })
+  async verifyOtp(@Body() body: verifyOtpDto, @Res() res: Response) {
+    try {
+      const storedOtp = await this.otpService.getOtp(body.email);
+      console.log(storedOtp);
+      if (!storedOtp || storedOtp !== body.otp) {
+        throw new UnauthorizedException('Invalid or expired OTP');
+      }
+
+      const user = await this.userService.findByEmail(body.email);
+
+      if (!user) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      const payload = { id: user.id, email: user.email, role: user.role };
+
+      const { token, refreshToken } = generateToken(payload, this.jwtService);
+
+      setCookie(res, token, refreshToken);
+      await this.otpService.deleteOtp(body.email);
+
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: {
+          message: UserMessage.Info.OTP_VERIFIED,
+        },
+      });
+    } catch (error) {
+      return ResponseHandler.error({
+        res,
+        error,
+      });
+    }
+  }
+}

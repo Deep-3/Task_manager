@@ -1,364 +1,243 @@
-import { type Response, Router } from "express";
-import { type AuthRequest } from "../../middleware/auth";
-import { TaskServices } from "./task.service";
-import { Task } from "./task.model";
-import { ResponseHandler } from "../../utils/response-handler";
-import { Task_MESSAGES } from "./task.constant";
-import { TaskStatus, UpdateTaskDTO } from "./task.type";
-import { HTTP_STATUS } from "../../constants/http-constants";
-import { validateBody, validateQuery, validateParams } from "../../middleware/validation";
 import {
-    createTaskSchema,
-    updateTaskSchema,
-    deleteTasksSchema,
-    taskQuerySchema,
-    taskParamsSchema,
-    type CreateTaskInput,
-    type UpdateTaskInput,
-    type DeleteTasksInput,
-    type TaskQueryInput,
-    type TaskParamsInput,
-} from "./task.validation";
-const taskService = new TaskServices(Task);
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  Req,
+  HttpStatus,
+  UseGuards,
+  Res,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
+import { TaskService } from './task.service';
+import {
+  CreateTaskDto,
+  DeleteTaskDto,
+  TaskQueryDto,
+  UpdateTaskDto,
+} from './task.dto';
+import type { AuthRequest } from '../../auth/auth.interface';
+import { JwtAuthGuard } from '../../middleware/auth.middleware';
+import { RoleGuard } from '../../middleware/auth.middleware';
+import { Roles } from '../../constant/role.decorator';
+import { TaskMessage } from './task.constant';
+import { ApiErrorResponse } from '../../constant/swagger.decorator';
+import {
+  TaskSingleResponseDto,
+  TaskPaginationDto,
+  TaskResponseDto,
+} from './task.response.dto';
+import type { Response } from 'express';
+import {
+  ResponseHandler,
+  SuccessCommonResponse,
+} from '../../common/response.utils';
+import { Successdata } from 'src/common/response.dto';
+import { TaskPagination } from './task.type';
 
-export const tasksController: ReturnType<typeof Router> = Router();
+@ApiTags('Tasks')
+@Controller('tasks')
+@UseGuards(JwtAuthGuard, RoleGuard)
+@ApiBearerAuth()
+export class TaskController {
+  constructor(private readonly taskService: TaskService) {}
 
-/**
- * @swagger
- * /tasks:
- *   post:
- *     summary: Create a new task
- *     tags: [Tasks]
- *     security:
- *       - cookieAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - title
- *             properties:
- *               title:
- *                 type: string
- *                 example: Complete project documentation
- *               description:
- *                 type: string
- *                 example: Write comprehensive API documentation
- *               status:
- *                 type: string
- *                 enum: [todo, in_progress, done]
- *                 example: todo
- *     responses:
- *       201:
- *         description: Task created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 statuscode:
- *                   type: integer
- *                   example: 201
- *                 data:
- *                   type: object
- *                   properties:
- *                     created:
- *                       $ref: '#/components/schemas/Task'
- *       400:
- *         description: Bad request - validation error
- *       401:
- *         description: Unauthorized
- */
-tasksController.post("/", validateBody(createTaskSchema), async (req: AuthRequest, res: Response) => {
+  @Post()
+  @ApiOperation({ summary: 'Create a new task' })
+  @ApiResponse({
+    status: 200,
+    description: 'Task created successfully',
+    type: TaskSingleResponseDto,
+  })
+  @ApiErrorResponse()
+  async create(
+    @Res() res: Response,
+    @Body() createTaskDto: CreateTaskDto,
+    @Req() req: AuthRequest,
+  ): Promise<Response<SuccessCommonResponse<TaskResponseDto>>> {
     try {
-        const { title, description, status } = req.body as CreateTaskInput;
-        const task = await taskService.getByTask(title, req.user!.id);
-        if (task) return ResponseHandler.badRequest(res, Task_MESSAGES.Error.TASK_ALREDY_EXISTS);
-        const created = await taskService.create({
-            title,
-            description: description ?? null,
-            status: status ?? TaskStatus.TODO,
-            ownerId: req.user!.id,
-        });
-        return ResponseHandler.created(res, { statuscode: HTTP_STATUS.CREATED, data: { created } });
+      const task = await this.taskService.create(createTaskDto, req);
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.CREATED,
+        data: {
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          status: task.status,
+        },
+      });
     } catch (error) {
-        return ResponseHandler.handleError(res, error);
+      return ResponseHandler.error({
+        res,
+        error,
+      });
     }
-});
+  }
 
-/**
- * @swagger
- * /tasks:
- *   get:
- *     summary: Get tasks with pagination and search
- *     tags: [Tasks]
- *     security:
- *       - cookieAuth: []
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           minimum: 1
- *           default: 1
- *         description: Page number
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           minimum: 1
- *           default: 10
- *         description: Number of tasks per page
- *       - in: query
- *         name: search
- *         schema:
- *           type: string
- *         description: Search query for task title or description
- *     responses:
- *       200:
- *         description: List of tasks
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 statuscode:
- *                   type: integer
- *                   example: 200
- *                 count:
- *                   type: integer
- *                   example: 5
- *                 page:
- *                   type: integer
- *                   example: 1
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Task'
- *       401:
- *         description: Unauthorized
- */
-tasksController.get("/", validateQuery(taskQuerySchema), async (req: AuthRequest, res: Response) => {
+  @Get('my-tasks')
+  @ApiOperation({ summary: 'Get tasks for current user' })
+  @ApiResponse({
+    status: 200,
+    description: TaskMessage.Info.RETRIEVE_TASKS,
+    type: TaskPaginationDto,
+  })
+  @ApiErrorResponse()
+  async getMyTasks(
+    @Res() res: Response,
+    @Req() req: AuthRequest,
+    @Query() { page, limit, search }: TaskQueryDto,
+  ): Promise<Response<SuccessCommonResponse<TaskPagination>>> {
     try {
-        const { page, limit, search } = req.query as unknown as TaskQueryInput;
+      const result = await this.taskService.findByOwner(
+        req.user.id,
+        page,
+        limit,
+        search,
+      );
 
-        const tasks =
-            req.user!.role === "admin"
-                ? await taskService.listAll(page, limit, search)
-                : await taskService.listByOwner(req.user!.id, page, limit, search);
-        return ResponseHandler.success(res, {
-            statuscode: HTTP_STATUS.OK,
-            count: tasks.rows.length,
-            page: tasks.page,
-            data: tasks.rows,
-        });
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: result,
+      });
     } catch (error) {
-        return ResponseHandler.handleError(res, error);
+      return ResponseHandler.error({
+        res,
+        error,
+      });
     }
-});
+  }
 
-/**
- * @swagger
- * /tasks/{id}:
- *   get:
- *     summary: Get a specific task by ID
- *     tags: [Tasks]
- *     security:
- *       - cookieAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Task ID
- *     responses:
- *       200:
- *         description: Task details
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 statuscode:
- *                   type: integer
- *                   example: 200
- *                 data:
- *                   type: object
- *                   properties:
- *                     task:
- *                       $ref: '#/components/schemas/Task'
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - Not task owner
- *       404:
- *         description: Task not found
- */
-tasksController.get("/:id", validateParams(taskParamsSchema), async (req: AuthRequest, res: Response) => {
+  @Get()
+  @Roles('admin')
+  @ApiOperation({ summary: 'Get all tasks (Admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'All tasks retrieved successfully',
+    type: TaskPaginationDto,
+  })
+  @ApiErrorResponse()
+  async findAll(
+    @Res() res: Response,
+    @Query() { page, limit, search }: TaskQueryDto,
+  ): Promise<Response<SuccessCommonResponse<TaskPagination>>> {
     try {
-        const { id } = req.params as TaskParamsInput;
-        const task = await taskService.getById(id);
-        if (!task) return ResponseHandler.notFound(res, Task_MESSAGES.Error.TASK_NOT_FOUND);
-        if (req.user!.role !== "admin" && task.ownerId !== req.user!.id) return ResponseHandler.forbidden(res);
-        return ResponseHandler.success(res, { statuscode: HTTP_STATUS.OK, data: { task } });
+      const AllTasks = await this.taskService.findAll(page, limit, search);
+
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: AllTasks,
+      });
     } catch (error) {
-        return ResponseHandler.handleError(res, error);
+      return ResponseHandler.error({
+        res,
+        error,
+      });
     }
-});
+  }
 
-/**
- * @swagger
- * /tasks/{id}:
- *   put:
- *     summary: Update a task
- *     tags: [Tasks]
- *     security:
- *       - cookieAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Task ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               title:
- *                 type: string
- *                 example: Updated task title
- *               description:
- *                 type: string
- *                 example: Updated task description
- *               status:
- *                 type: string
- *                 enum: [todo, in_progress, done]
- *                 example: in_progress
- *               priority:
- *                 type: string
- *                 enum: [low, medium, high]
- *                 example: high
- *               dueDate:
- *                 type: string
- *                 format: date-time
- *                 example: 2024-12-31T23:59:59Z
- *     responses:
- *       200:
- *         description: Task updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 statuscode:
- *                   type: integer
- *                   example: 200
- *                 data:
- *                   type: object
- *                   properties:
- *                     task:
- *                       $ref: '#/components/schemas/Task'
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - Not task owner
- *       404:
- *         description: Task not found
- */
-tasksController.put(
-    "/:id",
-    validateParams(taskParamsSchema),
-    validateBody(updateTaskSchema),
-    async (req: AuthRequest, res: Response) => {
-        try {
-            const { id } = req.params as TaskParamsInput;
-            const updateData = req.body as UpdateTaskInput;
-
-            const current = await taskService.getById(id);
-            if (!current) return ResponseHandler.notFound(res, Task_MESSAGES.Error.TASK_NOT_FOUND);
-            if (req.user!.role !== "admin" && current.ownerId !== req.user!.id) return ResponseHandler.forbidden(res);
-            const updated = await taskService.update(id, updateData as UpdateTaskDTO);
-            return ResponseHandler.success(res, { statuscode: HTTP_STATUS.OK, data: { task: updated } });
-        } catch (error) {
-            return ResponseHandler.handleError(res, error);
-        }
-    }
-);
-
-/**
- * @swagger
- * /tasks:
- *   delete:
- *     summary: Delete multiple tasks
- *     tags: [Tasks]
- *     security:
- *       - cookieAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - ids
- *             properties:
- *               ids:
- *                 type: array
- *                 items:
- *                   type: string
- *                   format: uuid
- *                 example: ["123e4567-e89b-12d3-a456-426614174000", "123e4567-e89b-12d3-a456-426614174001"]
- *     responses:
- *       200:
- *         description: Tasks deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 statuscode:
- *                   type: integer
- *                   example: 200
- *                 data:
- *                   type: object
- *                   properties:
- *                     deletedCount:
- *                       type: integer
- *                       example: 2
- *       400:
- *         description: Bad request - IDs required
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - Not task owner
- *       404:
- *         description: Task not found
- */
-tasksController.delete("/", validateBody(deleteTasksSchema), async (req: AuthRequest, res: Response) => {
+  @Get(':id')
+  @ApiOperation({ summary: 'Get task by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Task retrieved successfully',
+    type: TaskSingleResponseDto,
+  })
+  @ApiErrorResponse()
+  async findOne(
+    @Param('id') id: string,
+    @Res() res: Response,
+  ): Promise<
+    Response<SuccessCommonResponse<{ task: TaskResponseDto | null }>>
+  > {
     try {
-        const { ids } = req.body as DeleteTasksInput;
+      const task = await this.taskService.findById(id);
 
-        // Check permissions for each task
-        for (const id of ids) {
-            const task = await taskService.getById(id);
-            if (!task) return ResponseHandler.notFound(res, Task_MESSAGES.Error.TASK_NOT_FOUND);
-            if (req.user!.role !== "admin" && task.ownerId !== req.user!.id) {
-                return ResponseHandler.forbidden(res);
-            }
-        }
-
-        await taskService.delete(ids);
-        return ResponseHandler.success(res, { statuscode: HTTP_STATUS.OK, data: { deletedCount: ids.length } });
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: { task },
+      });
     } catch (error) {
-        return ResponseHandler.handleError(res, error);
+      return ResponseHandler.error({
+        res,
+        error,
+      });
     }
-});
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update task' })
+  @ApiResponse({
+    status: 200,
+    description: 'Task updated successfully',
+    type: TaskSingleResponseDto,
+  })
+  @ApiErrorResponse()
+  async update(
+    @Param('id') id: string,
+    @Body() updateTaskDto: UpdateTaskDto,
+    @Res() res: Response,
+  ): Promise<
+    Response<SuccessCommonResponse<{ task: TaskResponseDto | null }>>
+  > {
+    try {
+      const task = await this.taskService.update(id, updateTaskDto);
+      console.log(task);
+
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: { task },
+      });
+    } catch (error) {
+      return ResponseHandler.error({
+        res,
+        error,
+      });
+    }
+  }
+
+  @Delete()
+  @ApiOperation({ summary: 'Delete multiple tasks' })
+  @ApiResponse({
+    status: 200,
+    description: TaskMessage.Info.DELETE_TASK,
+    type: DeleteTaskDto,
+  })
+  @ApiErrorResponse()
+  async remove(
+    @Body() { ids }: DeleteTaskDto,
+    @Res() res: Response,
+  ): Promise<Response<SuccessCommonResponse<Successdata>>> {
+    try {
+      const deleted = await this.taskService.remove(ids);
+
+      return ResponseHandler.success({
+        res,
+        statuscode: HttpStatus.OK,
+        data: {
+          message: deleted
+            ? TaskMessage.Info.DELETE_TASK
+            : TaskMessage.Error.TASK_NOT_FOUND_TO_DELETE,
+        },
+      });
+    } catch (error) {
+      return ResponseHandler.error({
+        res,
+        error,
+      });
+    }
+  }
+}

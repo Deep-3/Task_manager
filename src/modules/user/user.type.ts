@@ -1,25 +1,18 @@
+import { User } from './user.entity';
+
 export enum UserRole {
-    USER = "user",
-    ADMIN = "admin",
+  USER = 'user',
+  ADMIN = 'admin',
 }
 
-export interface CreateUserDTO {
-    email: string;
-    password: string;
-    role?: UserRole;
+export interface UserPagination {
+  users: User[];
+  page: number;
+  total: number;
 }
 
-export interface UpdateUserDTO {
-    email?: string;
-    password?: string;
-    role?: UserRole;
-}
-
-export interface UserProps {
-    id: string;
-    email: string;
-    password: string;
-    role: UserRole;
-    createdAt: Date;
-    updatedAt: Date;
+export interface payload {
+  id: string;
+  email: string;
+  role: string;
 }
